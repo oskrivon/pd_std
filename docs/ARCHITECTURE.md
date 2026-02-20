@@ -354,6 +354,80 @@ async def run_continuous(self):
 1. Добавить стратегию в `assets/generator.py`
 2. Если нужен новый источник — создать клиент в `assets/`
 
+## Git Strategy (Multi-repo)
+
+Каждый проект — отдельный репозиторий. Это обеспечивает изоляцию и независимость.
+
+```
+C:/Ptero Dactyl Games/           ← НЕ git (workspace)
+├── .gitignore                   ← Игнорирует всё (safety net)
+│
+├── studio/                      ← git repo (инфраструктура)
+│   └── .git/
+│
+├── babylon/                     ← git repo (проект)
+│   └── .git/
+│
+├── backpack_hero/               ← git repo (проект)
+│   └── .git/
+│
+└── projects/                    ← Новые проекты
+    └── new_game/                ← git repo (проект)
+        └── .git/
+```
+
+### Преимущества для изоляции
+
+| Аспект | Польза |
+|--------|--------|
+| **Worker safety** | `git diff` показывает только изменения в своём репо |
+| **Boundary check** | Коммит не может затронуть чужой проект |
+| **Independent history** | Проекты развиваются независимо |
+| **Selective clone** | Клонируешь только нужный проект |
+
+### Worker Git Protocol
+
+```
+WORKER GIT RULES
+
+After completing a task:
+1. Stage only files within project boundary
+2. Commit with descriptive message
+3. DO NOT push (Orchestrator decides when to push)
+4. Update STATUS.json with last_commit timestamp
+
+Commit message format:
+  <type>: <description>
+
+  - type: feat, fix, refactor, docs, style, test
+  - description: what changed and why
+
+  Co-Authored-By: Claude <noreply@anthropic.com>
+```
+
+### Orchestrator Git Protocol
+
+```python
+class GitManager:
+    def validate_changes(self, project_path: str) -> bool:
+        """Verify all changes are within project boundary."""
+        # Get list of changed files
+        result = subprocess.run(
+            ['git', 'diff', '--name-only', 'HEAD'],
+            cwd=project_path,
+            capture_output=True
+        )
+        # All paths should be relative to project_path
+        # No ../ or absolute paths outside boundary
+        return self._check_paths(result.stdout)
+
+    def commit_if_valid(self, project_path: str, message: str):
+        """Commit only if validation passes."""
+        if self.validate_changes(project_path):
+            subprocess.run(['git', 'add', '-A'], cwd=project_path)
+            subprocess.run(['git', 'commit', '-m', message], cwd=project_path)
+```
+
 ## Inter-project Communication
 
 ### Иерархия контекстов
