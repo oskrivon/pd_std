@@ -1,0 +1,56 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+.env
+.env.*
+secrets/
+credentials.*
+*.pem
+*.key
+
+# Screenshots (large files)
+screenshots/
+captures/
+
+# Temp
+tmp/
+temp/
+*.tmp
