@@ -1,0 +1,30 @@
+{
+  "project": "PROJECT_NAME",
+  "engine": "love|unreal",
+  "updated": "2025-02-21T00:00:00Z",
+
+  "health": "green",
+  "last_validation": {
+    "passed": true,
+    "timestamp": "2025-02-21T00:00:00Z",
+    "screenshot": null
+  },
+
+  "tasks": {
+    "in_progress": 0,
+    "todo": 0,
+    "done": 0
+  },
+
+  "current_task": null,
+
+  "blockers": [],
+
+  "metrics": {
+    "loc": 0,
+    "files": 0,
+    "last_commit": null
+  },
+
+  "dependencies": []
+}

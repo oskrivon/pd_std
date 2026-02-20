@@ -1,0 +1,46 @@
+# .isolation — Project Boundary Configuration
+#
+# This file defines the isolation boundaries for worker agents.
+# Place as .isolation in project root.
+
+# Project identifier (must match folder name)
+project_id: PROJECT_NAME
+
+# Absolute path boundary (auto-filled by orchestrator)
+boundary: C:/Ptero Dactyl Games/PROJECT_NAME
+
+# External paths worker CAN READ (glob patterns)
+allowed_external_reads:
+  - studio/tools/**        # Shared toolbox
+  - studio/templates/**    # Project templates
+
+# External paths worker CAN WRITE (usually empty)
+allowed_external_writes: []
+
+# Paths within project that are RESTRICTED
+restricted_paths:
+  - .git/                  # Git internals
+  - .env                   # Secrets
+  - .env.*                 # Environment variants
+  - secrets/               # Secret files
+  - credentials.*          # Credential files
+
+# Tools worker is allowed to use
+allowed_tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - TodoWrite
+  # - Task                 # Disabled: prevents sub-agent spawning
+
+# Maximum execution time (seconds)
+timeout: 300
+
+# Require human approval for certain actions
+require_approval_for:
+  - delete_file
+  - modify_config
+  - external_api_call
