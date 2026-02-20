@@ -90,6 +90,9 @@
   - [ ] Dataclass Project со структурой
   - [ ] Scaffold для LÖVE и Unreal проектов
   - [ ] Автогенерация CLAUDE.md и BACKLOG.md
+  - [ ] Git init для нового проекта
+  - [ ] Генерация .gitignore по типу движка
+  - [ ] Initial commit с описанием проекта
 
 - [ ] **adapters/base.py** — базовый адаптер
   - [ ] ABC EngineAdapter с unified API
