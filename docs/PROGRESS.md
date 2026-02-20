@@ -10,6 +10,10 @@
 - Создан шаблон isolation.yaml для границ проектов
 - Создан системный промпт worker_isolation.md (EN) для изоляции агентов
 - Добавлены фазы 0, 0.5, 0.6 в план реализации
+- Добавлена секция Task Decomposition с decision tree
+- Добавлена секция Git Strategy (multi-repo)
+- Инициализирован git репозиторий для studio/
+- Создан .gitignore для workspace и studio
 
 ### 2025-02-21 (session 1)
 - Создана структура документации Ptero Dactyl Studio
