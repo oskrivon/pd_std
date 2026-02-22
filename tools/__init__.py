@@ -3,29 +3,37 @@ Ptero Dactyl Studio Toolbox
 
 Набор переиспользуемых инструментов для AI-агентов.
 
-Использование:
-    from studio.tools import capture, validate, run_game
+Usage:
+    from tools import capture, validate, run_game
 
     screenshot = capture(window="CardGame")
     result = validate(screenshot, prompt="Game running?")
     process = run_game("backpack_hero", engine="love")
 """
 
+
 # Ленивый импорт для ускорения загрузки
-def capture(*args, **kwargs):
+def capture(window: str, output: str = None, resize: tuple = None, **kwargs):
+    """Захват скриншота окна."""
     from .window_capture import capture_window
-    return capture_window(*args, **kwargs)
+    return capture_window(window=window, output=output, resize=resize, **kwargs)
 
-def validate(*args, **kwargs):
-    from .vision_validator import validate
-    return validate(*args, **kwargs)
 
-def run_game(*args, **kwargs):
-    from .game_runner import run_game
-    return run_game(*args, **kwargs)
+def validate(image: str, prompt: str, model: str = "haiku", **kwargs):
+    """Проверка изображения через Vision AI."""
+    from .vision_validator import validate as _validate
+    return _validate(image=image, prompt=prompt, model=model, **kwargs)
+
+
+def run_game(project: str, engine: str = None, wait: float = 0, **kwargs):
+    """Запуск игрового проекта."""
+    from .game_runner import run_game as _run_game
+    return _run_game(project=project, engine=engine, wait=wait, **kwargs)
+
 
 def generate_asset(*args, **kwargs):
-    from .asset_gen import generate
-    return generate(*args, **kwargs)
+    """Генерация ассетов (WIP)."""
+    raise NotImplementedError("Asset generation not implemented yet")
+
 
 __all__ = ['capture', 'validate', 'run_game', 'generate_asset']

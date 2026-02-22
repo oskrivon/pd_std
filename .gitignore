@@ -49,6 +49,7 @@ credentials.*
 # Screenshots (large files)
 screenshots/
 captures/
+validation/
 
 # Temp
 tmp/

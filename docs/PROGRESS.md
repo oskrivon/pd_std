@@ -2,6 +2,73 @@
 
 ## Лог
 
+### 2026-02-22 (session 3)
+- **Opus Analyzer Pipeline**:
+  - `core/analyzer.py` — анализ задач через Opus перед выполнением
+  - Классификация: SIMPLE, CLEAR, COMPLEX, UNCLEAR
+  - COMPLEX → автоматическая декомпозиция на подзадачи
+  - UNCLEAR → отклонение с фидбэком пользователю
+  - Флаг `--no-analyze` для пропуска анализа
+
+- **Улучшенный промпт**:
+  - Контекст про игровые объекты (уровень = локация, не меню)
+  - Рекомендуемые файлы для чтения
+  - Поддержка `--model` для выбора модели
+
+- **Тест на реальной задаче**:
+  - "добавить парк с деревьями" → Opus декомпозировал на 7 подзадач
+  - "сделай интереснее" → Opus отклонил как UNCLEAR
+  - Создан park_room.lua, rooms.lua, система переходов
+  - Игра работает с новым контентом
+
+- **Статистика сессии**:
+  - 19 задач выполнено
+  - 2 задачи отклонены (UNCLEAR)
+  - $0.08 потрачено
+
+### 2026-02-22 (session 2)
+- **MVP готов и протестирован**:
+  - Полный цикл: idea → decompose → daemon → validate → budget
+  - Тест на hamster: добавлен loading screen через 3 автоматические задачи
+
+- **Daemon mode** (`ptero-studio daemon`):
+  - Непрерывное выполнение задач из очереди
+  - Опции: --max, --interval, --max-failures
+  - Graceful shutdown по Ctrl+C
+
+- **Budget tracking** (`ptero-studio budget`):
+  - Подсчёт токенов и стоимости
+  - Дневные и месячные лимиты
+  - Интеграция с orchestrator
+
+- **Декомпозиция идей** (`ptero-studio idea`):
+  - Разбивка идей на конкретные задачи через Claude Code
+  - --dry-run для просмотра без добавления
+  - --max-tasks для ограничения
+
+- **Unreal интеграция**:
+  - Проекты автоматически обнаруживаются
+  - Валидация через window capture (если редактор открыт)
+
+- **Валидация для LÖVE**:
+  - Background capture работает (PrintWindow API)
+  - Скриншоты сохраняются в `studio/validation/`
+
+### 2025-02-22
+- **Реализован Toolbox (Фаза 0)**:
+  - `tools/window_capture/` — захват окон через Windows API
+  - `tools/vision_validator/` — проверка через Claude Vision API
+  - `tools/game_runner/` — запуск LÖVE/Unreal проектов
+  - `tools/cli.py` — единая точка входа `ptero-tool`
+- **Реализован Core Infrastructure (Фаза 1)**:
+  - `core/project.py` — модель проекта с discover и scaffold
+  - `core/task_queue.py` — приоритетная очередь задач (JSON persistence)
+  - `core/orchestrator.py` — координатор (проекты + задачи + выполнение через Claude Code)
+  - `cli.py` — CLI `ptero-studio` (projects, tasks, add, run, new, status)
+- **Протестирован полный цикл**: add → run → Claude Code выполняет → коммит
+- Ключевое открытие: stdin без `-p` включает tool execution в Claude CLI
+- Создан `pyproject.toml`
+
 ### 2025-02-21 (session 2)
 - Добавлена архитектура Toolbox — инструменты как отдельные модули
 - Добавлена архитектура Inter-project Communication (STATUS.json)

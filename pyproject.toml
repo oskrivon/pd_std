@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ptero-studio"
+version = "0.1.0"
+description = "AI-driven game development studio"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+dependencies = [
+    "Pillow>=10.0",
+    "anthropic>=0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "black>=23.0",
+    "ruff>=0.1",
+]
+full = [
+    "mss>=9.0",
+    "psutil>=5.9",
+]
+
+[project.scripts]
+ptero-tool = "tools.cli:main"
+ptero-studio = "cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["tools*", "core*", "adapters*", "assets*", "validation*", "config*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]

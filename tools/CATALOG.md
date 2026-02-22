@@ -6,43 +6,41 @@
 
 | Tool | Команда | Описание | Статус |
 |------|---------|----------|--------|
-| [window-capture](window-capture/CLAUDE.md) | `ptero-tool capture` | Захват скриншота окна | В разработке |
-| [vision-validator](vision-validator/CLAUDE.md) | `ptero-tool validate` | Проверка через Claude Vision | В разработке |
-| [game-runner](game-runner/CLAUDE.md) | `ptero-tool run` | Запуск и управление играми | В разработке |
-| [asset-gen](asset-gen/CLAUDE.md) | `ptero-tool asset` | Генерация ассетов | Планируется |
-| blender-render | `ptero-tool blender` | Рендер в Blender | Планируется |
+| [window_capture](window_capture/CLAUDE.md) | `ptero-tool capture` | Захват скриншота окна | Готов |
+| [vision_validator](vision_validator/CLAUDE.md) | `ptero-tool validate` | Проверка через Claude Vision | Готов |
+| [game_runner](game_runner/CLAUDE.md) | `ptero-tool run` | Запуск и управление играми | Готов |
+| [asset_gen](asset_gen/CLAUDE.md) | `ptero-tool asset` | Генерация ассетов | Планируется |
+| blender_render | `ptero-tool blender` | Рендер в Blender | Планируется |
 
 ## Использование
 
 ### CLI
 ```bash
-ptero-tool <command> [options]
+python -m tools.cli <command> [options]
 
 # Примеры
-ptero-tool capture --window "LÖVE" --output game.png
-ptero-tool validate game.png --prompt "Game running?"
-ptero-tool run backpack_hero --engine love --wait 2
-ptero-tool asset character --prompt "Fire mage" --style pixel
+python -m tools.cli capture --window "LOVE" --output game.png
+python -m tools.cli validate game.png --prompt "Game running?"
+python -m tools.cli run backpack_hero --engine love --wait 2
 ```
 
 ### Python API
 ```python
-from studio.tools import capture, validate, run_game, generate_asset
+from tools import capture, validate, run_game
 
 screenshot = capture(window="CardGame")
 result = validate(screenshot, prompt="UI works?")
 process = run_game("backpack_hero", engine="love")
-asset = generate_asset("character", prompt="Fire mage")
 ```
 
 ## Создание нового инструмента
 
-1. Создать папку `tools/my-tool/`
+1. Создать папку `tools/my_tool/`
 2. Добавить `CLAUDE.md` с документацией
-3. Реализовать `cli.py` (argparse CLI)
-4. Реализовать логику в `*.py`
+3. Реализовать CLI в `*.py` (argparse)
+4. Добавить `__init__.py` с exports
 5. Добавить запись в эту таблицу
-6. Добавить в `tools/__init__.py`
+6. Добавить lazy import в `tools/__init__.py`
 
 ## Принципы
 

@@ -1,0 +1,436 @@
+"""
+Orchestrator
+
+Main coordinator for the studio.
+Manages projects, task queue, and dispatches work to workers.
+
+Usage:
+    from core.orchestrator import Orchestrator
+
+    orch = Orchestrator("C:/Ptero Dactyl Games")
+    orch.add_task("backpack_hero", "Add pause menu")
+    orch.run_once()  # Execute one task
+"""
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Optional, List, Dict, Any
+import logging
+
+from .project import Project, discover_projects, Engine
+from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
+from .budget import Budget
+from .analyzer import analyze_task, TaskType, AnalysisResult
+
+logger = logging.getLogger("studio.orchestrator")
+
+# Check for anthropic SDK
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+
+class Orchestrator:
+    """
+    Main coordinator for the AI game development studio.
+    """
+
+    def __init__(
+        self,
+        workspace: str | Path = "C:/Ptero Dactyl Games",
+        tasks_file: str = "tasks.json",
+        budget_file: str = "budget.json"
+    ):
+        self.workspace = Path(workspace)
+        self.studio_path = self.workspace / "studio"
+
+        # Load projects
+        self._projects: Dict[str, Project] = {}
+        self._load_projects()
+
+        # Load task queue
+        self.tasks = TaskQueue.load(self.studio_path / tasks_file)
+
+        # Load budget tracker
+        self.budget = Budget.load(self.studio_path / budget_file)
+
+    def _load_projects(self) -> None:
+        """Discover and load all projects."""
+        projects = discover_projects(self.workspace)
+        self._projects = {p.name: p for p in projects}
+        logger.info(f"Loaded {len(self._projects)} projects")
+
+    def reload_projects(self) -> None:
+        """Reload project list."""
+        self._load_projects()
+
+    @property
+    def projects(self) -> List[Project]:
+        """Get all projects."""
+        return list(self._projects.values())
+
+    def get_project(self, name: str) -> Optional[Project]:
+        """Get project by name."""
+        return self._projects.get(name)
+
+    def add_task(
+        self,
+        project: str,
+        description: str,
+        priority: TaskPriority = TaskPriority.NORMAL
+    ) -> Task:
+        """
+        Add a task to the queue.
+        """
+        if project not in self._projects:
+            raise ValueError(f"Unknown project: {project}")
+
+        task = Task(
+            project=project,
+            description=description,
+            priority=priority
+        )
+
+        self.tasks.add(task)
+        self.tasks.save()
+
+        logger.info(f"Added task for {project}: {description[:50]}")
+        return task
+
+    def run_once(self, validate: bool = True, analyze: bool = True) -> Optional[Task]:
+        """
+        Execute one task from the queue.
+
+        Args:
+            validate: Run validation after task completion
+            analyze: Use Opus to analyze task first (recommended)
+
+        Returns:
+            Completed task or None if queue empty
+        """
+        task = self.tasks.pop_best()
+        if not task:
+            logger.info("No pending tasks")
+            return None
+
+        project = self.get_project(task.project)
+        if not project:
+            self.tasks.fail(task.id, f"Project not found: {task.project}")
+            self.tasks.save()
+            return task
+
+        # Analyze task with Opus first
+        analysis = None
+        if analyze:
+            logger.info(f"Analyzing: [{task.project}] {task.description[:50]}...")
+            analysis = analyze_task(
+                project=project.name,
+                description=task.description,
+                project_path=project.path,
+                project_engine=project.engine.value
+            )
+            logger.info(f"Analysis: {analysis.task_type.value} (confidence: {analysis.confidence})")
+
+            # Handle UNCLEAR tasks
+            if analysis.task_type == TaskType.UNCLEAR:
+                feedback = analysis.feedback or "Задача сформулирована неоднозначно"
+                self.tasks.fail(task.id, f"UNCLEAR: {feedback}")
+                self.tasks.save()
+                return task
+
+            # Handle COMPLEX tasks - create subtasks
+            if analysis.task_type == TaskType.COMPLEX and analysis.subtasks:
+                logger.info(f"Decomposing into {len(analysis.subtasks)} subtasks")
+                for i, subtask_desc in enumerate(analysis.subtasks):
+                    subtask = Task(
+                        project=task.project,
+                        description=subtask_desc,
+                        priority=task.priority,
+                        parent_id=task.id
+                    )
+                    self.tasks.add(subtask)
+                    logger.info(f"  Subtask {i+1}: {subtask_desc[:50]}")
+
+                # Mark original as completed (decomposed)
+                self.tasks.complete(task.id, f"Decomposed into {len(analysis.subtasks)} subtasks")
+                self.tasks.save()
+                return task
+
+        logger.info(f"Executing: [{task.project}] {task.description}")
+
+        import time
+        start_time = time.time()
+        success = False
+
+        try:
+            model = analysis.model_recommendation if analysis else "sonnet"
+            context_files = analysis.context_needed if analysis else None
+            result = self._execute_task(task, project, model=model, context_files=context_files)
+
+            if result.get("success"):
+                self.tasks.complete(task.id, result.get("output", ""))
+                success = True
+                # Validation is now a separate command, not automatic
+                # Use: ptero-studio validate <project>
+            else:
+                self.tasks.fail(task.id, result.get("error", "Unknown error"))
+
+        except Exception as e:
+            logger.exception(f"Task execution failed: {e}")
+            self.tasks.fail(task.id, str(e))
+
+        # Track budget
+        duration = time.time() - start_time
+        output_len = len(task.result or task.error or "")
+        self.budget.record_task(
+            task_id=task.id,
+            project=task.project,
+            description=task.description,
+            output_length=output_len,
+            duration_seconds=duration,
+            success=success
+        )
+        self.budget.save()
+
+        self.tasks.save()
+        return task
+
+    def _execute_task(
+        self,
+        task: Task,
+        project: Project,
+        model: str = "sonnet",
+        context_files: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Execute task using Claude Code.
+
+        Args:
+            task: Task to execute
+            project: Project context
+            model: Model to use (sonnet, opus, haiku)
+            context_files: Suggested files to read first
+        """
+        # Build prompt with context hints
+        context_hint = ""
+        if context_files:
+            context_hint = f"\nRECOMMENDED FILES TO READ: {', '.join(context_files)}\n"
+
+        prompt = f"""You are working on the "{project.name}" project ({project.engine.value} engine).
+
+TASK: {task.description}
+{context_hint}
+INSTRUCTIONS:
+1. Read the relevant files to understand the codebase
+2. Make the necessary code changes to complete the task
+3. Keep changes minimal and focused
+4. After making changes, commit with message describing what you did
+
+IMPORTANT CONTEXT:
+- In games, "уровень" (level) means a game location/room, NOT a menu screen
+- Game objects like trees, benches, enemies are gameplay content
+- If task mentions game objects, create actual game content
+
+DO NOT ask for clarification - just do the task based on the description.
+If something is unclear, make reasonable assumptions and proceed.
+"""
+
+        # Find Claude CLI (handle Windows .cmd)
+        import shutil
+        claude_cmd = shutil.which("claude") or shutil.which("claude.cmd")
+        if not claude_cmd:
+            return {
+                "success": False,
+                "error": "Claude CLI not found. Is it installed?"
+            }
+
+        try:
+            # Run Claude Code in project directory with specified model
+            cmd = [claude_cmd, "--dangerously-skip-permissions"]
+            if model and model != "sonnet":  # sonnet is default
+                cmd.extend(["--model", model])
+
+            result = subprocess.run(
+                cmd,
+                input=prompt,
+                cwd=project.path,
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minutes
+                shell=(sys.platform == "win32"),
+                encoding='utf-8',
+                errors='replace'  # Handle encoding issues
+            )
+
+            if result.returncode == 0:
+                return {
+                    "success": True,
+                    "output": result.stdout
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.stderr or "Non-zero exit code"
+                }
+
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "error": "Task timed out (5 minutes)"
+            }
+        except FileNotFoundError:
+            return {
+                "success": False,
+                "error": "Claude CLI not found. Is it installed?"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def _validate_project(self, project: Project) -> Dict[str, Any]:
+        """
+        Run validation on project (smoke test).
+        Uses Claude Code for vision validation (no API key needed).
+        """
+        if project.engine != Engine.LOVE:
+            return {"passed": True, "skipped": True}
+
+        try:
+            from tools import run_game, capture
+
+            # Run game
+            process = run_game(
+                project=str(project.path),
+                engine="love",
+                wait=2
+            )
+
+            if not process:
+                return {"passed": False, "issues": ["Failed to start game"]}
+
+            # Capture screenshot
+            screenshot_path = self.studio_path / f"validation_{project.name}.png"
+            screenshot = capture(
+                window=project.name,
+                output=str(screenshot_path)
+            )
+            process.kill()
+
+            if not screenshot:
+                return {"passed": False, "issues": ["Failed to capture screenshot"]}
+
+            # Validate with Claude Code (uses vision, no API key needed)
+            return self._validate_screenshot(screenshot_path, project)
+
+        except Exception as e:
+            logger.exception(f"Validation failed: {e}")
+            return {"passed": False, "issues": [str(e)]}
+
+    def _validate_screenshot(self, screenshot_path: Path, project: Project) -> Dict[str, Any]:
+        """
+        Validate screenshot using Claude Code (has vision capabilities).
+        """
+        import shutil
+        import json
+
+        claude_cmd = shutil.which("claude") or shutil.which("claude.cmd")
+        if not claude_cmd:
+            return {"passed": False, "issues": ["Claude CLI not found"]}
+
+        prompt = f'''Look at the screenshot {screenshot_path.name} and validate:
+1. Is the game "{project.name}" running correctly?
+2. Any errors, crashes, or black screens visible?
+3. Does the UI look functional?
+
+Respond ONLY with JSON (no markdown):
+{{"passed": true/false, "explanation": "brief description", "issues": ["issue1"] or []}}'''
+
+        try:
+            result = subprocess.run(
+                [claude_cmd, "--dangerously-skip-permissions"],
+                input=prompt,
+                cwd=self.studio_path,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                shell=(sys.platform == "win32")
+            )
+
+            output = result.stdout.strip()
+
+            # Parse JSON from response
+            # Find JSON in output (may have markdown code blocks)
+            if "```" in output:
+                # Extract from code block
+                import re
+                match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', output, re.DOTALL)
+                if match:
+                    output = match.group(1)
+
+            # Try to find raw JSON
+            start = output.find("{")
+            end = output.rfind("}") + 1
+            if start >= 0 and end > start:
+                json_str = output[start:end]
+                data = json.loads(json_str)
+                return {
+                    "passed": data.get("passed", False),
+                    "issues": data.get("issues", []),
+                    "explanation": data.get("explanation", "")
+                }
+
+            # Fallback
+            return {
+                "passed": "error" not in output.lower(),
+                "issues": [],
+                "explanation": output[:200]
+            }
+
+        except Exception as e:
+            logger.exception(f"Screenshot validation failed: {e}")
+            return {"passed": False, "issues": [str(e)]}
+
+    def run_all(self, max_tasks: int = 10, analyze: bool = True) -> List[Task]:
+        """
+        Execute up to max_tasks from the queue.
+        """
+        completed = []
+        for _ in range(max_tasks):
+            task = self.run_once(analyze=analyze)
+            if not task:
+                break
+            completed.append(task)
+
+            # Stop on failure
+            if task.status == TaskStatus.FAILED:
+                logger.warning("Stopping due to failed task")
+                break
+
+        return completed
+
+    def status(self) -> Dict[str, Any]:
+        """Get overall status."""
+        return {
+            "projects": len(self._projects),
+            "tasks": self.tasks.stats(),
+            "workspace": str(self.workspace)
+        }
+
+
+# Module test
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
+    orch = Orchestrator()
+
+    print("Projects:")
+    for p in orch.projects:
+        print(f"  {p.name} ({p.engine.value})")
+
+    print("\nStatus:", orch.status())
