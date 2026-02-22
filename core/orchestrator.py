@@ -24,6 +24,14 @@ from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
 from .budget import Budget
 from .analyzer import analyze_task, TaskType, AnalysisResult
 from .project_status import ProjectStatus
+from .isolation import (
+    IsolationConfig,
+    IsolationViolation,
+    validate_changes,
+    rollback_changes,
+    build_isolation_prompt,
+    log_violation
+)
 
 logger = logging.getLogger("studio.orchestrator")
 
@@ -218,7 +226,8 @@ class Orchestrator:
         task: Task,
         project: Project,
         model: str = "sonnet",
-        context_files: Optional[List[str]] = None
+        context_files: Optional[List[str]] = None,
+        enforce_isolation: bool = True
     ) -> Dict[str, Any]:
         """
         Execute task using Claude Code.
@@ -228,13 +237,21 @@ class Orchestrator:
             project: Project context
             model: Model to use (sonnet, opus, haiku)
             context_files: Suggested files to read first
+            enforce_isolation: Check boundaries after execution
         """
+        # Load isolation config
+        isolation_config = IsolationConfig.load(project.path)
+
         # Build prompt with context hints
         context_hint = ""
         if context_files:
             context_hint = f"\nRECOMMENDED FILES TO READ: {', '.join(context_files)}\n"
 
+        # Build isolation rules
+        isolation_rules = build_isolation_prompt(project.path, isolation_config)
+
         prompt = f"""You are working on the "{project.name}" project ({project.engine.value} engine).
+{isolation_rules}
 
 TASK: {task.description}
 {context_hint}
@@ -281,6 +298,22 @@ If something is unclear, make reasonable assumptions and proceed.
             )
 
             if result.returncode == 0:
+                # Post-validation: check boundary violations
+                if enforce_isolation:
+                    violations = validate_changes(project.path, isolation_config)
+                    if violations:
+                        logger.warning(f"Isolation violations detected: {violations}")
+                        log_violation(
+                            project=project.name,
+                            violations=violations,
+                            log_dir=self.studio_path / "logs"
+                        )
+                        rollback_changes(project.path)
+                        return {
+                            "success": False,
+                            "error": f"ISOLATION_VIOLATION: {', '.join(violations)}"
+                        }
+
                 return {
                     "success": True,
                     "output": result.stdout

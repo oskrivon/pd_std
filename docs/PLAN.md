@@ -2,14 +2,24 @@
 
 ## In Progress
 
-(Нет активных задач — MVP завершён)
+(Нет активных задач)
 
 ## TODO
 
 ### Следующие улучшения
 
 - [ ] **Prompt caching** — оптимизация токенов через кэширование
-- [ ] **Context isolation** — boundary validation между проектами
+
+## Done
+
+### 2026-02-22 — Context Isolation
+- [x] **Context isolation** (`core/isolation.py`):
+  - [x] IsolationConfig class (.isolation files)
+  - [x] Path validation (boundary + restricted paths)
+  - [x] Post-execution boundary check
+  - [x] Automatic rollback on violations
+  - [x] Isolation rules in worker prompt
+  - [x] 17 unit tests for isolation
 
 ## Backlog
 

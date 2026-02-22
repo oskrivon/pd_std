@@ -2,6 +2,21 @@
 
 ## Лог
 
+### 2026-02-22 (session 5)
+- **Context Isolation** (`core/isolation.py`):
+  - IsolationConfig class for loading .isolation files
+  - Path validation: boundary check + restricted paths (.git, .env, secrets/)
+  - Post-execution validation via git diff
+  - Automatic rollback on boundary violations
+  - Isolation rules injected into worker prompt
+  - Violation logging to studio/logs/violations.jsonl
+  - 17 unit tests for isolation
+
+- **Test Suite** (128 tests total, all passing):
+  - 82 unit tests (+17 isolation tests)
+  - 34 integration tests
+  - 12 E2E tests
+
 ### 2026-02-22 (session 4)
 - **Test Suite** (111 tests total, all passing):
   - 65 unit tests (task_queue, project_status, budget)
