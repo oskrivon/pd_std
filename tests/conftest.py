@@ -43,11 +43,12 @@ def temp_workspace(temp_dir: Path) -> Path:
     (studio / "logs").mkdir()
     (studio / "validation").mkdir()
 
-    # Create a test project
+    # Create a test project (needs main.lua for LOVE engine detection)
     test_project = temp_dir / "test_project"
     test_project.mkdir()
-    (test_project / "CLAUDE.md").write_text("# Test Project\n", encoding="utf-8")
-    (test_project / "main.lua").write_text("-- Test\n", encoding="utf-8")
+    (test_project / "CLAUDE.md").write_text("# Test Project\nA LOVE 2D test project.\n", encoding="utf-8")
+    (test_project / "main.lua").write_text("-- Test game\nfunction love.load() end\n", encoding="utf-8")
+    (test_project / "conf.lua").write_text("-- Config\n", encoding="utf-8")
 
     return temp_dir
 
