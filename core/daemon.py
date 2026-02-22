@@ -42,13 +42,15 @@ class Daemon:
         validate: bool = True,
         analyze: bool = True,  # Use Opus to analyze tasks first
         max_consecutive_failures: int = 3,
-        log_to_file: bool = True
+        log_to_file: bool = True,
+        workers: int = 1  # Number of parallel workers (1 = sequential)
     ):
         self.workspace = Path(workspace)
         self.poll_interval = poll_interval
         self.validate = validate
         self.analyze = analyze
         self.max_consecutive_failures = max_consecutive_failures
+        self.workers = workers
 
         # Setup logging
         self.log_dir = self.workspace / "studio" / "logs"
@@ -89,7 +91,12 @@ class Daemon:
 
         logger.info(f"Daemon started at {self.stats['started_at']}")
         logger.info(f"Workspace: {self.workspace}")
+        logger.info(f"Workers: {self.workers}")
         print(f"Daemon started at {self.stats['started_at']}")
+
+        # Use parallel execution if workers > 1
+        if self.workers > 1:
+            return self._run_parallel(max_tasks)
         print(f"Workspace: {self.workspace}")
         print(f"Press Ctrl+C to stop\n")
 
@@ -179,6 +186,55 @@ class Daemon:
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
+
+    def _run_parallel(self, max_tasks: Optional[int] = None) -> dict:
+        """Run with parallel workers."""
+        from .parallel import ParallelExecutor
+
+        print(f"Workspace: {self.workspace}")
+        print(f"Workers: {self.workers}")
+        print(f"Press Ctrl+C to stop\n")
+
+        try:
+            executor = ParallelExecutor(
+                workspace=self.workspace,
+                workers=self.workers,
+                analyze=self.analyze,
+                validate=self.validate
+            )
+
+            while self._running:
+                # Check for pending tasks
+                pending = self.orch.tasks.stats()["pending"]
+
+                if pending == 0:
+                    print(f"[{self._timestamp()}] No pending tasks, waiting {self.poll_interval}s...")
+                    time.sleep(self.poll_interval)
+                    self.orch.tasks.reload()
+                    continue
+
+                # Run batch of tasks
+                batch_size = min(pending, max_tasks or 100)
+                results = executor.run(max_tasks=batch_size)
+
+                for r in results:
+                    if r.success:
+                        self.stats["tasks_completed"] += 1
+                    else:
+                        self.stats["tasks_failed"] += 1
+
+                # Check if done
+                if max_tasks:
+                    total = self.stats["tasks_completed"] + self.stats["tasks_failed"]
+                    if total >= max_tasks:
+                        break
+
+        except KeyboardInterrupt:
+            print("\n[STOP] Interrupted by user")
+        finally:
+            self._running = False
+
+        return self._print_summary()
 
     def _timestamp(self) -> str:
         """Current timestamp for logging."""

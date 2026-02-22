@@ -20,11 +20,12 @@ Usage:
 import heapq
 import json
 import uuid
+import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 import logging
 
 logger = logging.getLogger("studio.task_queue")
@@ -115,12 +116,15 @@ class TaskQueue:
     """
     Priority queue for tasks.
     Uses heapq internally, persists to JSON.
+    Thread-safe for parallel worker access.
     """
 
     def __init__(self, path: Optional[Path] = None):
         self.path = path
         self._tasks: Dict[str, Task] = {}  # id -> Task
         self._heap: List[Task] = []  # Heap of pending tasks
+        self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._locked_projects: Set[str] = set()  # Projects currently being worked on
 
     @classmethod
     def load(cls, path: str | Path) -> "TaskQueue":
@@ -166,32 +170,34 @@ class TaskQueue:
             logger.error(f"Failed to reload tasks: {e}")
 
     def save(self) -> None:
-        """Save queue to JSON file."""
+        """Save queue to JSON file (thread-safe)."""
         if not self.path:
             logger.warning("No path set, cannot save")
             return
 
-        data = {
-            "tasks": [t.to_dict() for t in self._tasks.values()],
-            "updated_at": datetime.now().isoformat()
-        }
+        with self._lock:
+            data = {
+                "tasks": [t.to_dict() for t in self._tasks.values()],
+                "updated_at": datetime.now().isoformat()
+            }
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False),
+                encoding="utf-8"
+            )
 
-        logger.info(f"Saved {len(self._tasks)} tasks to {self.path}")
+            logger.info(f"Saved {len(self._tasks)} tasks to {self.path}")
 
     def add(self, task: Task) -> Task:
-        """Add task to queue."""
-        self._tasks[task.id] = task
-        if task.status == TaskStatus.PENDING:
-            heapq.heappush(self._heap, task)
+        """Add task to queue (thread-safe)."""
+        with self._lock:
+            self._tasks[task.id] = task
+            if task.status == TaskStatus.PENDING:
+                heapq.heappush(self._heap, task)
 
-        logger.info(f"Added task {task.id}: {task.description[:50]}")
-        return task
+            logger.info(f"Added task {task.id}: {task.description[:50]}")
+            return task
 
     def add_many(self, tasks: List[Task]) -> List[Task]:
         """Add multiple tasks."""
@@ -203,54 +209,108 @@ class TaskQueue:
         """Get task by ID."""
         return self._tasks.get(task_id)
 
-    def pop_best(self) -> Optional[Task]:
+    def pop_best(self, exclude_projects: Optional[Set[str]] = None) -> Optional[Task]:
         """
         Get highest priority pending task.
         Marks it as in_progress.
+
+        Args:
+            exclude_projects: Projects to skip (for parallel execution)
         """
-        # Clean up heap (remove non-pending tasks)
-        while self._heap:
-            task = self._heap[0]
-            if task.status == TaskStatus.PENDING:
-                break
-            heapq.heappop(self._heap)
+        with self._lock:
+            # Clean up heap (remove non-pending tasks)
+            while self._heap:
+                task = self._heap[0]
+                if task.status == TaskStatus.PENDING:
+                    break
+                heapq.heappop(self._heap)
 
-        if not self._heap:
-            return None
+            if not self._heap:
+                return None
 
-        task = heapq.heappop(self._heap)
-        task.status = TaskStatus.IN_PROGRESS
-        task.started_at = datetime.now().isoformat()
+            # Find best task not in excluded projects
+            if exclude_projects:
+                # Need to scan for non-excluded task
+                temp = []
+                result = None
 
-        logger.info(f"Popped task {task.id}: {task.description[:50]}")
-        return task
+                while self._heap:
+                    task = heapq.heappop(self._heap)
+                    if task.status != TaskStatus.PENDING:
+                        continue
+                    if task.project not in exclude_projects:
+                        result = task
+                        break
+                    temp.append(task)
+
+                # Put skipped tasks back
+                for t in temp:
+                    heapq.heappush(self._heap, t)
+
+                if not result:
+                    return None
+
+                task = result
+            else:
+                task = heapq.heappop(self._heap)
+
+            task.status = TaskStatus.IN_PROGRESS
+            task.started_at = datetime.now().isoformat()
+
+            logger.info(f"Popped task {task.id}: {task.description[:50]}")
+            return task
+
+    def pop_for_parallel(self) -> Optional[Task]:
+        """
+        Get task for parallel execution.
+        Automatically excludes projects that are currently locked.
+        Locks the project of the returned task.
+        """
+        with self._lock:
+            task = self.pop_best(exclude_projects=self._locked_projects)
+            if task:
+                self._locked_projects.add(task.project)
+            return task
+
+    def release_project(self, project: str) -> None:
+        """Release project lock after task completion."""
+        with self._lock:
+            self._locked_projects.discard(project)
 
     def complete(self, task_id: str, result: Optional[str] = None) -> Optional[Task]:
-        """Mark task as completed."""
-        task = self._tasks.get(task_id)
-        if not task:
-            logger.warning(f"Task not found: {task_id}")
-            return None
+        """Mark task as completed (thread-safe)."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                logger.warning(f"Task not found: {task_id}")
+                return None
 
-        task.status = TaskStatus.COMPLETED
-        task.completed_at = datetime.now().isoformat()
-        task.result = result
+            task.status = TaskStatus.COMPLETED
+            task.completed_at = datetime.now().isoformat()
+            task.result = result
 
-        logger.info(f"Completed task {task_id}")
-        return task
+            # Release project lock
+            self._locked_projects.discard(task.project)
+
+            logger.info(f"Completed task {task_id}")
+            return task
 
     def fail(self, task_id: str, error: str) -> Optional[Task]:
-        """Mark task as failed."""
-        task = self._tasks.get(task_id)
-        if not task:
-            return None
+        """Mark task as failed (thread-safe)."""
+        with self._lock:
+            task = self._tasks.get(task_id)
+            if not task:
+                return None
 
-        task.status = TaskStatus.FAILED
-        task.completed_at = datetime.now().isoformat()
-        task.error = error
+            task.status = TaskStatus.FAILED
+            task.completed_at = datetime.now().isoformat()
+            task.error = error
 
-        logger.warning(f"Failed task {task_id}: {error}")
-        return task
+            # Release project lock
+            self._locked_projects.discard(task.project)
+
+            logger.warning(f"Failed task {task_id}: {error}")
+            return task
 
     def requeue(self, task_id: str) -> Optional[Task]:
         """Put failed/blocked task back in queue."""

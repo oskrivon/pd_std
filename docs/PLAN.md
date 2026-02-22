@@ -8,7 +8,6 @@
 
 ### Следующие улучшения
 
-- [ ] **Parallel workers** — несколько сессий Claude Code одновременно
 - [ ] **Prompt caching** — оптимизация токенов через кэширование
 - [ ] **Inter-project communication** — STATUS.json между проектами
 - [ ] **Context isolation** — boundary validation между проектами

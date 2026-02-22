@@ -3,6 +3,12 @@
 ## Лог
 
 ### 2026-02-22 (session 4)
+- **Parallel Workers**:
+  - `core/parallel.py` — параллельное выполнение задач
+  - Thread-safe task queue с project locking
+  - `--workers N` (1-4) для daemon команды
+  - Разные проекты выполняются параллельно, один проект — последовательно
+
 - **File Logging**:
   - `core/logging_config.py` — настройка логирования
   - `logs/daemon.log` — общий лог демона (daily rotation, 7 дней)
