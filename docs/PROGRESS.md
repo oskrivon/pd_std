@@ -2,6 +2,13 @@
 
 ## Лог
 
+### 2026-02-22 (session 4)
+- **File Logging**:
+  - `core/logging_config.py` — настройка логирования
+  - `logs/daemon.log` — общий лог демона (daily rotation, 7 дней)
+  - `logs/tasks.log` — детальный лог задач
+  - Флаг `--no-log` для отключения файлового логирования
+
 ### 2026-02-22 (session 3)
 - **Opus Analyzer Pipeline**:
   - `core/analyzer.py` — анализ задач через Opus перед выполнением

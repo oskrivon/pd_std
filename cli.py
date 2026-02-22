@@ -277,7 +277,8 @@ def cmd_daemon(args, orch: Orchestrator):
         poll_interval=args.interval,
         validate=not args.no_validate,
         analyze=not getattr(args, 'no_analyze', False),
-        max_consecutive_failures=args.max_failures
+        max_consecutive_failures=args.max_failures,
+        log_to_file=not getattr(args, 'no_log', False)
     )
 
     daemon.run(max_tasks=args.max)
@@ -361,6 +362,7 @@ Examples:
     daemon_parser.add_argument("--no-validate", action="store_true", help="Skip validation")
     daemon_parser.add_argument("--no-analyze", action="store_true", help="Skip Opus analysis")
     daemon_parser.add_argument("--max-failures", type=int, default=3, help="Stop after N consecutive failures")
+    daemon_parser.add_argument("--no-log", action="store_true", help="Disable file logging")
 
     args = parser.parse_args()
 

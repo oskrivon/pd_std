@@ -55,3 +55,4 @@ validation/
 tmp/
 temp/
 *.tmp
+*.json

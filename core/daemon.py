@@ -9,6 +9,11 @@ Usage:
 
     daemon = Daemon(workspace="C:/Ptero Dactyl Games")
     daemon.run()  # Runs until empty or Ctrl+C
+
+Logs are written to:
+    - Console (always)
+    - studio/logs/daemon.log (daily rotation)
+    - studio/logs/tasks.log (task details)
 """
 
 import signal
@@ -20,8 +25,9 @@ from typing import Optional
 from datetime import datetime
 
 from .orchestrator import Orchestrator
+from .logging_config import setup_logging, TaskLogger, get_logger
 
-logger = logging.getLogger("studio.daemon")
+logger = get_logger("daemon")
 
 
 class Daemon:
@@ -35,13 +41,23 @@ class Daemon:
         poll_interval: int = 10,  # seconds between checks when idle
         validate: bool = True,
         analyze: bool = True,  # Use Opus to analyze tasks first
-        max_consecutive_failures: int = 3
+        max_consecutive_failures: int = 3,
+        log_to_file: bool = True
     ):
         self.workspace = Path(workspace)
         self.poll_interval = poll_interval
         self.validate = validate
         self.analyze = analyze
         self.max_consecutive_failures = max_consecutive_failures
+
+        # Setup logging
+        self.log_dir = self.workspace / "studio" / "logs"
+        if log_to_file:
+            setup_logging(log_dir=self.log_dir)
+            self.task_logger = TaskLogger(self.log_dir)
+        else:
+            setup_logging()
+            self.task_logger = None
 
         self.orch = Orchestrator(workspace=workspace)
         self._running = False
@@ -71,7 +87,8 @@ class Daemon:
         self.stats["started_at"] = datetime.now().isoformat()
         tasks_executed = 0
 
-        logger.info("Daemon started")
+        logger.info(f"Daemon started at {self.stats['started_at']}")
+        logger.info(f"Workspace: {self.workspace}")
         print(f"Daemon started at {self.stats['started_at']}")
         print(f"Workspace: {self.workspace}")
         print(f"Press Ctrl+C to stop\n")
@@ -95,17 +112,42 @@ class Daemon:
 
                 if task:
                     tasks_executed += 1
+                    task_duration = time.time() - time.time()  # Will be calculated properly
 
                     if task.status.value == "completed":
                         self.stats["tasks_completed"] += 1
                         self._consecutive_failures = 0
+                        logger.info(f"[OK] {task.project}: {task.description[:50]}")
                         print(f"  [OK] {task.project}: {task.description[:50]}")
+
+                        # Log to task file
+                        if self.task_logger:
+                            self.task_logger.log_task(
+                                task_id=task.id,
+                                project=task.project,
+                                description=task.description,
+                                status="completed",
+                                duration=0,  # TODO: get actual duration from orchestrator
+                                output=task.result
+                            )
                     else:
                         self.stats["tasks_failed"] += 1
                         self._consecutive_failures += 1
+                        logger.warning(f"[FAIL] {task.project}: {task.description[:50]} - {task.error}")
                         print(f"  [FAIL] {task.project}: {task.description[:50]}")
                         if task.error:
                             print(f"         Error: {task.error[:80]}")
+
+                        # Log failure to task file
+                        if self.task_logger:
+                            self.task_logger.log_task(
+                                task_id=task.id,
+                                project=task.project,
+                                description=task.description,
+                                status="failed",
+                                duration=0,
+                                error=task.error
+                            )
 
                         # Check failure threshold
                         if self._consecutive_failures >= self.max_consecutive_failures:
