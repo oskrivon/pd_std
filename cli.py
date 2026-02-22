@@ -274,6 +274,42 @@ def cmd_idea(args, orch: Orchestrator):
     return 0
 
 
+def cmd_test(args, orch: Orchestrator):
+    """Run tests."""
+    import subprocess
+
+    cmd = ["python", "-m", "pytest"]
+
+    # Add markers
+    if args.unit:
+        cmd.extend(["-m", "not integration and not e2e"])
+    elif args.integration:
+        cmd.extend(["-m", "integration"])
+    elif args.e2e:
+        cmd.extend(["-m", "e2e"])
+
+    # Add verbosity
+    if args.verbose:
+        cmd.append("-v")
+
+    # Coverage
+    if args.coverage:
+        cmd.extend(["--cov=core", "--cov-report=term-missing"])
+
+    # Specific test file or pattern
+    if args.pattern:
+        cmd.append(args.pattern)
+
+    print(f"Running: {' '.join(cmd)}")
+
+    result = subprocess.run(
+        cmd,
+        cwd=orch.studio_path
+    )
+
+    return result.returncode
+
+
 def cmd_daemon(args, orch: Orchestrator):
     """Run daemon mode (continuous execution)."""
     from core.daemon import Daemon
@@ -363,6 +399,15 @@ Examples:
     idea_parser.add_argument("--max-tasks", type=int, default=5, help="Max tasks to generate")
     idea_parser.add_argument("--dry-run", action="store_true", help="Show tasks without adding")
 
+    # test
+    test_parser = subparsers.add_parser("test", help="Run tests")
+    test_parser.add_argument("--unit", action="store_true", help="Run unit tests only")
+    test_parser.add_argument("--integration", action="store_true", help="Run integration tests only")
+    test_parser.add_argument("--e2e", action="store_true", help="Run e2e tests only")
+    test_parser.add_argument("--coverage", "-c", action="store_true", help="Run with coverage")
+    test_parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    test_parser.add_argument("pattern", nargs="?", help="Test file or pattern")
+
     # daemon
     daemon_parser = subparsers.add_parser("daemon", help="Run continuous mode")
     daemon_parser.add_argument("--max", type=int, help="Max tasks before stopping")
@@ -393,6 +438,7 @@ Examples:
         "validate": cmd_validate,
         "budget": cmd_budget,
         "idea": cmd_idea,
+        "test": cmd_test,
         "daemon": cmd_daemon
     }
 

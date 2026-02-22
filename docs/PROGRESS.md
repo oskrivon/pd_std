@@ -3,6 +3,13 @@
 ## Лог
 
 ### 2026-02-22 (session 4)
+- **Test Suite** (111 tests total):
+  - 65 unit tests (task_queue, project_status, budget)
+  - 34 integration tests (orchestrator, analyzer)
+  - 12 E2E tests (full cycle, CLI, parallel execution)
+  - `ptero-studio test` command (--unit, --integration, --e2e, --coverage)
+  - Thread-safety tests for parallel workers
+
 - **Inter-project Communication**:
   - `core/project_status.py` — STATUS.json для проектов
   - Состояния: idle, working, blocked, error, ready
