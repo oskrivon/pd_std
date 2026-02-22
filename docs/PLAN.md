@@ -9,7 +9,6 @@
 ### Следующие улучшения
 
 - [ ] **Prompt caching** — оптимизация токенов через кэширование
-- [ ] **Inter-project communication** — STATUS.json между проектами
 - [ ] **Context isolation** — boundary validation между проектами
 
 ## Backlog

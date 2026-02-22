@@ -23,6 +23,7 @@ from .project import Project, discover_projects, Engine
 from .task_queue import TaskQueue, Task, TaskStatus, TaskPriority
 from .budget import Budget
 from .analyzer import analyze_task, TaskType, AnalysisResult
+from .project_status import ProjectStatus
 
 logger = logging.getLogger("studio.orchestrator")
 
@@ -166,6 +167,11 @@ class Orchestrator:
         start_time = time.time()
         success = False
 
+        # Update project status: working
+        project_status = ProjectStatus.load(project.path)
+        project_status.set_working(task.description[:50])
+        project_status.save()
+
         try:
             model = analysis.model_recommendation if analysis else "sonnet"
             context_files = analysis.context_needed if analysis else None
@@ -174,14 +180,22 @@ class Orchestrator:
             if result.get("success"):
                 self.tasks.complete(task.id, result.get("output", ""))
                 success = True
-                # Validation is now a separate command, not automatic
-                # Use: ptero-studio validate <project>
+                # Update project status: completed
+                project_status.set_completed(task.description[:50])
+                project_status.save()
             else:
-                self.tasks.fail(task.id, result.get("error", "Unknown error"))
+                error = result.get("error", "Unknown error")
+                self.tasks.fail(task.id, error)
+                # Update project status: failed
+                project_status.set_failed(task.description[:50], error[:100])
+                project_status.save()
 
         except Exception as e:
             logger.exception(f"Task execution failed: {e}")
             self.tasks.fail(task.id, str(e))
+            # Update project status: error
+            project_status.set_failed(task.description[:50], str(e)[:100])
+            project_status.save()
 
         # Track budget
         duration = time.time() - start_time

@@ -3,6 +3,12 @@
 ## Лог
 
 ### 2026-02-22 (session 4)
+- **Inter-project Communication**:
+  - `core/project_status.py` — STATUS.json для проектов
+  - Состояния: idle, working, blocked, error, ready
+  - Автоматическое обновление в orchestrator
+  - `ptero-studio status --projects` для обзора всех проектов
+
 - **Parallel Workers**:
   - `core/parallel.py` — параллельное выполнение задач
   - Thread-safe task queue с project locking

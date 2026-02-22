@@ -156,6 +156,12 @@ def cmd_new(args, orch: Orchestrator):
 
 def cmd_status(args, orch: Orchestrator):
     """Show overall status."""
+    # Show project statuses if requested
+    if getattr(args, 'projects', False):
+        from core.project_status import print_all_statuses
+        safe_print(print_all_statuses(args.workspace))
+        return 0
+
     status = orch.status()
 
     print("Ptero Dactyl Studio")
@@ -340,7 +346,8 @@ Examples:
     new_parser.add_argument("--engine", "-e", choices=["love", "unreal"], default="love")
 
     # status
-    subparsers.add_parser("status", help="Show overall status")
+    status_parser = subparsers.add_parser("status", help="Show overall status")
+    status_parser.add_argument("--projects", "-p", action="store_true", help="Show all project statuses")
 
     # validate
     validate_parser = subparsers.add_parser("validate", help="Validate a project")

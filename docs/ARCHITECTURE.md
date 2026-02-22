@@ -461,38 +461,33 @@ class GitManager:
 
 ### STATUS.json — машиночитаемый статус проекта
 
-Каждый проект содержит `docs/STATUS.json` для Orchestrator:
+Каждый проект содержит `STATUS.json` в корне (автоматически обновляется orchestrator):
 
 ```json
 {
   "project": "babylon",
-  "engine": "unreal",
-  "updated": "2025-02-21T15:30:00Z",
-
-  "health": "green",
-  "last_validation": {
-    "passed": true,
-    "timestamp": "2025-02-21T15:25:00Z"
-  },
-
-  "tasks": {
-    "in_progress": 1,
-    "todo": 12,
-    "done": 45
-  },
-
-  "current_task": {
-    "name": "Implement card drag-drop",
-    "started": "2025-02-21T15:00:00Z"
-  },
-
-  "blockers": [],
-
-  "metrics": {
-    "loc": 3000,
-    "last_commit": "2025-02-21T14:00:00Z"
-  }
+  "state": "working",
+  "current_task": "Implement card drag-drop",
+  "last_task": "Add mana display",
+  "last_task_status": "completed",
+  "last_updated": "2025-02-21T15:30:00Z",
+  "blocked_by": null,
+  "error_message": null,
+  "tasks_completed": 45,
+  "tasks_failed": 2
 }
+```
+
+**Состояния проекта:**
+- `idle` — нет активной работы
+- `working` — задача выполняется
+- `blocked` — ожидание внешнего ресурса
+- `error` — последняя задача failed
+- `ready` — готов к следующей задаче
+
+**CLI команда:**
+```bash
+ptero-studio status --projects
 ```
 
 ### Принцип изоляции
