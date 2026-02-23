@@ -221,6 +221,26 @@ class Orchestrator:
         self.tasks.save()
         return task
 
+    def _kill_process_tree(self, pid: int):
+        """Kill a process and all its children."""
+        if sys.platform == "win32":
+            # Use taskkill with /T to kill process tree
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=10
+                )
+            except Exception as e:
+                logger.warning(f"Failed to kill process tree {pid}: {e}")
+        else:
+            # On Unix, use process groups
+            import signal
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+            except Exception as e:
+                logger.warning(f"Failed to kill process group {pid}: {e}")
+
     def _execute_task(
         self,
         task: Task,
@@ -255,13 +275,31 @@ class Orchestrator:
 
 TASK: {task.description}
 {context_hint}
-INSTRUCTIONS:
-1. Read the relevant files to understand the codebase
-2. Make the necessary code changes to complete the task
-3. Keep changes minimal and focused
-4. After making changes, commit with message describing what you did
 
-IMPORTANT CONTEXT:
+## ОБЯЗАТЕЛЬНО: Сначала изучи документацию
+
+ПЕРЕД началом работы прочитай:
+1. `CLAUDE.md` — инструкции проекта, архитектура, важные правила
+2. `docs/RUNBOOK.md` — как запускать, известные проблемы и решения
+3. `docs/PROGRESS.md` — что уже сделано, какие проблемы были и как решались
+
+## Если что-то не работает
+
+Когда сталкиваешься с проблемой (чёрный экран, краш, ошибка):
+1. СНАЧАЛА поищи в `docs/RUNBOOK.md` и `docs/PROGRESS.md` — возможно, это уже решалось
+2. Если нашёл решение — примени его
+3. Если не нашёл — попробуй решить и ЗАПИШИ решение в документацию
+
+## INSTRUCTIONS
+
+1. Read CLAUDE.md and docs/ to understand the project
+2. Read relevant code files
+3. Make minimal, focused changes
+4. After making changes, commit with descriptive message
+5. If you solved a new problem, document it in docs/PROGRESS.md
+
+## IMPORTANT CONTEXT
+
 - In games, "уровень" (level) means a game location/room, NOT a menu screen
 - Game objects like trees, benches, enemies are gameplay content
 - If task mentions game objects, create actual game content
@@ -285,19 +323,45 @@ If something is unclear, make reasonable assumptions and proceed.
             if model and model != "sonnet":  # sonnet is default
                 cmd.extend(["--model", model])
 
-            result = subprocess.run(
+            # Add isolation to system prompt to override parent CLAUDE.md context
+            isolation_system = (
+                f'CRITICAL: You are working ONLY on project "{project.name}". '
+                f'IGNORE all context about other projects (backpack_hero, babylon, studio, hamster, etc. - except the one you are working on). '
+                f'Focus ONLY on files within {project.path}.'
+            )
+            cmd.extend(["--append-system-prompt", isolation_system])
+
+            # Use Popen for better process control and proper timeout killing
+            timeout_seconds = 300  # 5 minutes
+
+            # On Windows, use CREATE_NEW_PROCESS_GROUP for proper tree killing
+            creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0
+
+            proc = subprocess.Popen(
                 cmd,
-                input=prompt,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 cwd=project.path,
-                capture_output=True,
                 text=True,
-                timeout=300,  # 5 minutes
-                shell=(sys.platform == "win32"),
                 encoding='utf-8',
-                errors='replace'  # Handle encoding issues
+                errors='replace',
+                creationflags=creationflags
             )
 
-            if result.returncode == 0:
+            try:
+                stdout, stderr = proc.communicate(input=prompt, timeout=timeout_seconds)
+            except subprocess.TimeoutExpired:
+                # Kill entire process tree
+                self._kill_process_tree(proc.pid)
+                proc.kill()
+                proc.wait()
+                return {
+                    "success": False,
+                    "error": f"Task timed out ({timeout_seconds // 60} minutes)"
+                }
+
+            if proc.returncode == 0:
                 # Post-validation: check boundary violations
                 if enforce_isolation:
                     violations = validate_changes(project.path, isolation_config)
@@ -316,19 +380,14 @@ If something is unclear, make reasonable assumptions and proceed.
 
                 return {
                     "success": True,
-                    "output": result.stdout
+                    "output": stdout
                 }
             else:
                 return {
                     "success": False,
-                    "error": result.stderr or "Non-zero exit code"
+                    "error": stderr or "Non-zero exit code"
                 }
 
-        except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": "Task timed out (5 minutes)"
-            }
         except FileNotFoundError:
             return {
                 "success": False,

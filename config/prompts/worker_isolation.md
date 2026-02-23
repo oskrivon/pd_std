@@ -95,9 +95,27 @@ If ANY answer suggests violation → STOP and REPORT.
 
 {task_description}
 
-## PROJECT CONTEXT
+## ОБЯЗАТЕЛЬНО: Сначала изучи документацию
 
-Read `{project_path}/CLAUDE.md` for project-specific instructions.
-Read `{project_path}/docs/PLAN.md` for current tasks.
+ПЕРЕД началом работы прочитай:
+1. `{project_path}/CLAUDE.md` — инструкции проекта, архитектура, важные правила
+2. `{project_path}/docs/RUNBOOK.md` — как запускать, известные проблемы и решения
+3. `{project_path}/docs/PROGRESS.md` — что уже сделано, какие проблемы были и как решались
+
+## Если что-то не работает
+
+Когда сталкиваешься с проблемой (чёрный экран, краш, ошибка):
+1. СНАЧАЛА поищи в `docs/RUNBOOK.md` и `docs/PROGRESS.md` — возможно, это уже решалось
+2. Если нашёл решение — примени его
+3. Если не нашёл — попробуй решить и ЗАПИШИ решение в документацию
+
+## WORKFLOW
+
+1. Read documentation (CLAUDE.md, docs/)
+2. Understand what was already done and what problems were solved
+3. Execute the task
+4. If you encounter a problem — check docs first
+5. If you solve a new problem — document it in docs/PROGRESS.md
+6. Commit changes with descriptive message
 
 Begin work within your boundaries.

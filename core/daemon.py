@@ -86,6 +86,9 @@ class Daemon:
         self._running = True
         self._setup_signal_handlers()
 
+        # Reset any stuck IN_PROGRESS tasks from previous crashed runs
+        self._reset_stuck_tasks()
+
         self.stats["started_at"] = datetime.now().isoformat()
         tasks_executed = 0
 
@@ -186,6 +189,19 @@ class Daemon:
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
+
+    def _reset_stuck_tasks(self):
+        """Reset any IN_PROGRESS tasks to PENDING (from previous crashed runs)."""
+        from .task_queue import TaskStatus
+        reset_count = 0
+        for task in self.orch.tasks.all_tasks():
+            if task.status == TaskStatus.IN_PROGRESS:
+                task.status = TaskStatus.PENDING
+                task.started_at = None
+                reset_count += 1
+        if reset_count > 0:
+            self.orch.tasks.save()
+            logger.info(f"Reset {reset_count} stuck IN_PROGRESS tasks to PENDING")
 
     def _run_parallel(self, max_tasks: Optional[int] = None) -> dict:
         """Run with parallel workers."""

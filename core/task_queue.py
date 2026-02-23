@@ -189,6 +189,22 @@ class TaskQueue:
 
             logger.info(f"Saved {len(self._tasks)} tasks to {self.path}")
 
+    def _save_unlocked(self) -> None:
+        """Save without acquiring lock (call only when lock is held)."""
+        if not self.path:
+            return
+
+        data = {
+            "tasks": [t.to_dict() for t in self._tasks.values()],
+            "updated_at": datetime.now().isoformat()
+        }
+
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+
     def add(self, task: Task) -> Task:
         """Add task to queue (thread-safe)."""
         with self._lock:
@@ -208,6 +224,17 @@ class TaskQueue:
     def get(self, task_id: str) -> Optional[Task]:
         """Get task by ID."""
         return self._tasks.get(task_id)
+
+    def remove(self, task_id: str) -> bool:
+        """Remove task by ID (thread-safe). Returns True if removed."""
+        with self._lock:
+            if task_id in self._tasks:
+                task = self._tasks.pop(task_id)
+                # Mark as cancelled so heap cleanup skips it
+                task.status = TaskStatus.FAILED
+                logger.info(f"Removed task {task_id}")
+                return True
+            return False
 
     def pop_best(self, exclude_projects: Optional[Set[str]] = None) -> Optional[Task]:
         """
@@ -258,6 +285,9 @@ class TaskQueue:
             task.started_at = datetime.now().isoformat()
 
             logger.info(f"Popped task {task.id}: {task.description[:50]}")
+
+            # Save immediately so status is visible
+            self._save_unlocked()
             return task
 
     def pop_for_parallel(self) -> Optional[Task]:

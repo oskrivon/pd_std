@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -310,6 +311,97 @@ def cmd_test(args, orch: Orchestrator):
     return result.returncode
 
 
+def cmd_web(args, orch: Orchestrator):
+    """Start web dashboard."""
+    try:
+        import uvicorn
+    except ImportError:
+        print("uvicorn not installed. Run: pip install uvicorn fastapi jinja2 python-multipart")
+        return 1
+
+    os.environ["PTERO_WORKSPACE"] = args.workspace
+
+    print(f"Starting dashboard at http://{args.host}:{args.port}")
+    print("Press Ctrl+C to stop")
+
+    uvicorn.run(
+        "web.app:app",
+        host=args.host,
+        port=args.port,
+        reload=True,
+        log_level="info"
+    )
+    return 0
+
+
+def cmd_inbox(args, orch: Orchestrator):
+    """Import tasks from markdown files or create new template."""
+    from core.md_tasks import import_tasks_from_inbox, create_task_template, parse_task_md
+
+    inbox_path = Path(args.workspace) / "studio" / args.path
+
+    # Create new template
+    if args.new:
+        template_path = create_task_template(inbox_path, args.new, args.project)
+        print(f"Created: {template_path}")
+        print(f"Edit the file and run 'ptero-studio inbox' to import")
+        return 0
+
+    # Import tasks from inbox
+    if not inbox_path.exists():
+        print(f"Inbox folder not found: {inbox_path}")
+        print(f"Create it or use --new to create a task template")
+        return 1
+
+    md_files = list(inbox_path.glob("*.md"))
+    if not md_files:
+        print(f"No .md files in {inbox_path}")
+        return 0
+
+    print(f"Found {len(md_files)} task file(s)")
+
+    imported = 0
+    for md_file in md_files:
+        if md_file.name.startswith("_"):
+            continue
+
+        task = parse_task_md(md_file)
+        if not task:
+            print(f"  [SKIP] {md_file.name}: parse error")
+            continue
+
+        # Add to queue
+        prompt = task.to_prompt()
+        priority = {
+            "critical": "critical",
+            "high": "high",
+            "normal": "normal",
+            "low": "low"
+        }.get(task.priority, "normal")
+
+        from core.task_queue import TaskPriority
+        prio_enum = TaskPriority[priority.upper()]
+
+        new_task = orch.tasks.add(
+            project=task.project,
+            description=prompt,
+            priority=prio_enum
+        )
+        orch.tasks.save()
+
+        print(f"  [OK] {task.title} -> {new_task.id}")
+        imported += 1
+
+        # Archive
+        if not args.no_archive:
+            archive_path = inbox_path / "archive"
+            archive_path.mkdir(exist_ok=True)
+            md_file.rename(archive_path / md_file.name)
+
+    print(f"\nImported: {imported} task(s)")
+    return 0
+
+
 def cmd_daemon(args, orch: Orchestrator):
     """Run daemon mode (continuous execution)."""
     from core.daemon import Daemon
@@ -418,6 +510,18 @@ Examples:
     daemon_parser.add_argument("--no-log", action="store_true", help="Disable file logging")
     daemon_parser.add_argument("--workers", "-w", type=int, default=1, help="Parallel workers (1-4, default 1)")
 
+    # web - dashboard
+    web_parser = subparsers.add_parser("web", help="Start web dashboard")
+    web_parser.add_argument("--port", type=int, default=8000, help="Port (default 8000)")
+    web_parser.add_argument("--host", default="127.0.0.1", help="Host (default 127.0.0.1)")
+
+    # inbox - markdown task import
+    inbox_parser = subparsers.add_parser("inbox", help="Import tasks from markdown files")
+    inbox_parser.add_argument("--path", default="tasks_inbox", help="Inbox folder path")
+    inbox_parser.add_argument("--no-archive", action="store_true", help="Don't move processed files to archive")
+    inbox_parser.add_argument("--new", metavar="TITLE", help="Create new task template")
+    inbox_parser.add_argument("--project", default="backpack_hero", help="Project for new template")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -439,7 +543,9 @@ Examples:
         "budget": cmd_budget,
         "idea": cmd_idea,
         "test": cmd_test,
-        "daemon": cmd_daemon
+        "daemon": cmd_daemon,
+        "inbox": cmd_inbox,
+        "web": cmd_web
     }
 
     handler = commands.get(args.command)

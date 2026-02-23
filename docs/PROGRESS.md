@@ -2,6 +2,16 @@
 
 ## Лог
 
+### 2026-02-23
+
+- **Worker Documentation Instructions** (`core/orchestrator.py`):
+  - Добавлены явные инструкции для воркеров читать документацию ПЕРЕД началом работы
+  - Воркер теперь обязан прочитать: CLAUDE.md, docs/RUNBOOK.md, docs/PROGRESS.md
+  - При возникновении проблем — сначала искать решение в документации
+  - Если решение не найдено — решить и ЗАПИСАТЬ в документацию
+  - **Причина:** воркер игнорировал известные решения (чёрный экран в Pixel Streaming)
+  - Обновлён шаблон `config/prompts/worker_isolation.md`
+
 ### 2026-02-22 (session 5)
 - **Context Isolation** (`core/isolation.py`):
   - IsolationConfig class for loading .isolation files

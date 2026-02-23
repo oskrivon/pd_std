@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - Ptero Studio{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold">Tasks</h1>
+        <div class="flex items-center space-x-3">
+            <select
+                hx-get="/tasks"
+                hx-target="body"
+                hx-push-url="true"
+                name="project"
+                class="bg-gray-700 rounded px-3 py-2"
+            >
+                <option value="">All Projects</option>
+                {% for p in projects %}
+                <option value="{{ p.name }}" {% if selected_project == p.name %}selected{% endif %}>{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="bg-gray-800 rounded-lg overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-700">
+                <tr>
+                    <th class="px-4 py-3 text-left text-sm">ID</th>
+                    <th class="px-4 py-3 text-left text-sm">Project</th>
+                    <th class="px-4 py-3 text-left text-sm">Description</th>
+                    <th class="px-4 py-3 text-left text-sm">Priority</th>
+                    <th class="px-4 py-3 text-left text-sm">Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+                {% for task in tasks %}
+                <tr class="hover:bg-gray-700/50">
+                    <td class="px-4 py-3 text-sm font-mono text-gray-400">{{ task.id[:8] }}</td>
+                    <td class="px-4 py-3 text-sm">{{ task.project }}</td>
+                    <td class="px-4 py-3 text-sm">{{ task.description[:80] }}{% if task.description|length > 80 %}...{% endif %}</td>
+                    <td class="px-4 py-3 text-sm">
+                        {% if task.priority.name == "CRITICAL" %}
+                        <span class="px-2 py-0.5 rounded bg-red-600 text-xs">critical</span>
+                        {% elif task.priority.name == "HIGH" %}
+                        <span class="px-2 py-0.5 rounded bg-orange-600 text-xs">high</span>
+                        {% elif task.priority.name == "NORMAL" %}
+                        <span class="px-2 py-0.5 rounded bg-green-600 text-xs">normal</span>
+                        {% else %}
+                        <span class="px-2 py-0.5 rounded bg-gray-600 text-xs">low</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-sm">
+                        {% if task.status.value == "pending" %}
+                        <span class="text-yellow-400">⏳ pending</span>
+                        {% elif task.status.value == "in_progress" %}
+                        <span class="text-blue-400">🔄 running</span>
+                        {% elif task.status.value == "completed" %}
+                        <span class="text-green-400">✅ done</span>
+                        {% else %}
+                        <span class="text-red-400">❌ failed</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-4 py-8 text-center text-gray-500">No tasks</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
