@@ -31,8 +31,28 @@
                     </svg>
                     <span>{{ task.started_at[:19].replace('T', ' ') }}</span>
                 </div>
-                <span class="text-blue-400 font-medium" data-started="{{ task.started_at }}">Running...</span>
+                <div class="flex items-center space-x-2">
+                    {% if task.elapsed_seconds is defined %}
+                    <span class="text-yellow-400 font-mono font-medium">
+                        {% if task.elapsed_seconds >= 3600 %}
+                        {{ (task.elapsed_seconds // 3600)|int }}h {{ ((task.elapsed_seconds % 3600) // 60)|int }}m
+                        {% elif task.elapsed_seconds >= 60 %}
+                        {{ (task.elapsed_seconds // 60)|int }}m {{ (task.elapsed_seconds % 60)|int }}s
+                        {% else %}
+                        {{ task.elapsed_seconds|int }}s
+                        {% endif %}
+                    </span>
+                    {% endif %}
+                    <span class="text-blue-400 animate-pulse">●</span>
+                </div>
             </div>
+            <!-- Progress bar (time-based, max 5 min) -->
+            {% if task.elapsed_seconds is defined %}
+            <div class="mt-2 h-1 bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-1000"
+                     style="width: {{ [task.elapsed_seconds / 300 * 100, 100]|min }}%"></div>
+            </div>
+            {% endif %}
             {% endif %}
         </div>
         {% endfor %}

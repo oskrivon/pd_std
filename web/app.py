@@ -66,6 +66,8 @@ templates = Jinja2Templates(directory=web_dir / "templates")
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Main dashboard."""
+    from datetime import datetime
+
     tasks = db.all_tasks()
     stats = db.stats()
 
@@ -73,6 +75,18 @@ async def index(request: Request):
     in_progress = [t for t in tasks if t.status == TaskStatus.IN_PROGRESS]
     completed = [t for t in tasks if t.status == TaskStatus.COMPLETED]
     failed = [t for t in tasks if t.status == TaskStatus.FAILED]
+
+    # Calculate elapsed time for in-progress tasks
+    now = datetime.now()
+    for task in in_progress:
+        if task.started_at:
+            try:
+                started = datetime.fromisoformat(task.started_at)
+                task.elapsed_seconds = (now - started).total_seconds()
+            except:
+                task.elapsed_seconds = 0
+        else:
+            task.elapsed_seconds = 0
 
     return templates.TemplateResponse("index.html", {
         "request": request,
@@ -141,8 +155,22 @@ async def stats_partial(request: Request):
 @app.get("/partials/in-progress", response_class=HTMLResponse)
 async def in_progress_partial(request: Request):
     """In-progress tasks partial for polling updates."""
+    from datetime import datetime
+
     tasks = db.all_tasks()
     in_progress = [t for t in tasks if t.status == TaskStatus.IN_PROGRESS]
+
+    # Calculate elapsed time for each task
+    now = datetime.now()
+    for task in in_progress:
+        if task.started_at:
+            try:
+                started = datetime.fromisoformat(task.started_at)
+                task.elapsed_seconds = (now - started).total_seconds()
+            except:
+                task.elapsed_seconds = 0
+        else:
+            task.elapsed_seconds = 0
 
     return templates.TemplateResponse("partials/in_progress.html", {
         "request": request,
