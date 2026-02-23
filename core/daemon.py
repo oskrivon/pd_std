@@ -24,9 +24,10 @@ from typing import Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from .task_db import TaskDB, Task, TaskStatus, get_task_db
+from .task_db import TaskDB, Task, TaskStatus, TaskPriority, get_task_db
 from .project import discover_projects, Project
 from .logging_config import setup_logging, TaskLogger, get_logger
+from .analyzer import analyze_task, TaskType
 
 logger = get_logger("daemon")
 
@@ -240,6 +241,13 @@ class Daemon:
             self.db.fail(task.id, f"Project not found: {task.project}")
             return False
 
+        # Analyze task if enabled
+        if self.analyze:
+            analysis_result = self._analyze_and_route(task, project)
+            if analysis_result is not None:
+                # Task was handled by analyzer (decomposed or rejected)
+                return analysis_result
+
         start_time = time.time()
 
         try:
@@ -290,6 +298,63 @@ class Daemon:
                     error=error
                 )
             return False
+
+    def _analyze_and_route(self, task: Task, project: Project) -> Optional[bool]:
+        """
+        Analyze task and route appropriately.
+
+        Returns:
+            None - task should be executed normally
+            True - task was handled (decomposed into subtasks)
+            False - task was rejected (UNCLEAR)
+        """
+        try:
+            logger.info(f"Analyzing task {task.id}: {task.description[:50]}...")
+            print(f"  [ANALYZE] {task.description[:50]}...")
+
+            result = analyze_task(
+                project=task.project,
+                description=task.description,
+                project_path=project.path,
+                project_engine=project.engine.value
+            )
+
+            logger.info(f"Analysis result: {result.task_type.value} (confidence: {result.confidence})")
+
+            if result.task_type == TaskType.UNCLEAR:
+                # Reject task - needs clarification
+                feedback = result.feedback or "Task is unclear, please provide more details"
+                self.db.fail(task.id, f"UNCLEAR: {feedback}")
+                print(f"  [REJECT] {feedback}")
+                return False
+
+            elif result.task_type == TaskType.COMPLEX and result.subtasks:
+                # Decompose into subtasks
+                print(f"  [DECOMPOSE] Breaking into {len(result.subtasks)} subtasks:")
+
+                for i, subtask_desc in enumerate(result.subtasks, 1):
+                    subtask = Task(
+                        project=task.project,
+                        description=subtask_desc,
+                        priority=task.priority,
+                        parent_id=task.id
+                    )
+                    self.db.add(subtask)
+                    print(f"    {i}. {subtask_desc[:60]}...")
+
+                # Mark parent as completed (subtasks will be executed)
+                self.db.complete(task.id, f"Decomposed into {len(result.subtasks)} subtasks")
+                return True
+
+            else:
+                # SIMPLE or CLEAR - execute normally
+                logger.info(f"Task {task.id} classified as {result.task_type.value}, executing...")
+                return None
+
+        except Exception as e:
+            logger.warning(f"Analysis failed for task {task.id}: {e}, executing without analysis")
+            print(f"  [WARN] Analysis failed: {e}, executing directly")
+            return None
 
     def _run_claude_code(self, task: Task, project: Project) -> dict:
         """Run Claude Code to execute the task."""
