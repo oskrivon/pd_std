@@ -397,8 +397,8 @@ When encountering problems:
 DO NOT ask for clarification - make reasonable assumptions and proceed.
 """
 
-        cmd = [claude_cmd, "--dangerously-skip-permissions"]
-        timeout_seconds = 300  # 5 minutes
+        cmd = [claude_cmd, "--print", "--dangerously-skip-permissions"]
+        timeout_seconds = 180  # 3 minutes (reduced from 5)
 
         try:
             # Use CREATE_NEW_PROCESS_GROUP on Windows for proper killing

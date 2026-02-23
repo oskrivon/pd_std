@@ -76,6 +76,10 @@ def analyze_task(
 
     prompt = f'''Ты — архитектор игровой студии. Проанализируй задачу и определи её тип.
 
+ИЗОЛЯЦИЯ: Ты работаешь ТОЛЬКО с проектом "{project}".
+ИГНОРИРУЙ любую информацию о других проектах (backpack_hero, babylon, studio и т.д.).
+Если в контексте упоминается "лава", "рюкзак", "треугольная сетка" — это НЕ относится к текущему проекту.
+
 ПРОЕКТ: {project} ({project_engine} engine)
 ЗАДАЧА: {description}
 
@@ -113,14 +117,21 @@ def analyze_task(
             model_recommendation="sonnet"
         )
 
+    # Isolation prompt to prevent cross-project context leaking
+    isolation_prompt = f"""CRITICAL: You are analyzing a task for project "{project}" ONLY.
+IGNORE all context about other projects (backpack_hero, babylon, studio, etc.).
+If you see mentions of "lava map", "triangular grid", "backpack", "CCG", "Unreal" - these are NOT relevant.
+Focus ONLY on the task description provided."""
+
     try:
         result = subprocess.run(
-            [claude_cmd, "--dangerously-skip-permissions", "--model", "opus"],
+            [claude_cmd, "--print", "--dangerously-skip-permissions", "--model", "opus",
+             "--append-system-prompt", isolation_prompt],
             input=prompt,
             cwd=project_path,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=60,  # Reduced to 1 minute for analysis
             shell=(sys.platform == "win32"),
             encoding='utf-8',
             errors='replace'

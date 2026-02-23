@@ -4,6 +4,24 @@
 
 ### 2026-02-23 (session 2)
 
+- **Fix: Claude CLI hanging** (`core/daemon.py`, `core/analyzer.py`):
+  - **Проблема:** Задачи висели по 5 минут и таймаутились
+  - **Причина:** Claude CLI без `--print` запускался в интерактивном режиме и ждал TTY
+  - **Решение:** Добавлен флаг `--print` для non-interactive режима
+  - Уменьшен timeout: daemon 5→3 мин, analyzer 2→1 мин
+
+- **Web Dashboard improvements**:
+  - Добавлена секция "Running Tasks" с отображением выполняемых задач
+  - Elapsed time — показывает сколько времени задача выполняется
+  - Progress bar — визуальный индикатор (заполняется за 3 минуты)
+  - Auto-refresh каждые 5 секунд через HTMX
+
+- **Opus Analyzer integration** (`core/daemon.py`):
+  - Анализатор подключён к daemon (по умолчанию включён)
+  - COMPLEX задачи автоматически разбиваются на подзадачи
+  - UNCLEAR задачи отклоняются с фидбэком
+  - Флаг `--no-analyze` для отключения
+
 - **SQLite Task Queue Refactoring**:
   - Полностью переписан task queue на SQLite (`core/task_db.py`)
   - **Причина:** Multiple Orchestrator/TaskQueue instances causing sync issues
