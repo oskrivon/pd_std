@@ -67,8 +67,8 @@ studio/
 ├── core/
 │   ├── orchestrator.py    # Главный координатор
 │   │   └── Orchestrator   # Класс: decompose(), schedule(), dispatch()
-│   ├── task_queue.py      # Приоритетная очередь задач
-│   │   └── TaskQueue      # Класс: add(), pop_best(), reorder()
+│   ├── task_db.py         # SQLite-based task queue (thread-safe)
+│   │   └── TaskDB         # Класс: add(), pop(), complete(), fail(), stats()
 │   ├── project.py         # Модель проекта
 │   │   └── Project        # Класс: структура, состояние, файлы
 │   ├── daemon.py          # Continuous execution
@@ -113,7 +113,7 @@ studio/
 | Класс | Ответственность |
 |-------|-----------------|
 | `Orchestrator` | Декомпозиция идей, планирование, координация воркеров |
-| `TaskQueue` | Приоритизация задач, выбор best ROI |
+| `TaskDB` | SQLite task queue: atomic pop, transactions, crash recovery |
 | `Daemon` | Непрерывное выполнение, graceful shutdown |
 | `BudgetManager` | Трекинг токенов, выбор модели (Opus/Sonnet/Haiku) |
 | `EngineAdapter` | Unified API для движков: run, capture, inject |
@@ -172,7 +172,8 @@ def pick_best_task(tasks):
            ┌───────────────┼───────────────┐
            ▼               ▼               ▼
     ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-    │ TaskQueue   │ │ BudgetMgr   │ │ Validator   │
+    │ TaskDB      │ │ BudgetMgr   │ │ Validator   │
+    │ (SQLite)    │ │             │ │             │
     └─────────────┘ └─────────────┘ └──────┬──────┘
                                            │
                                            ▼

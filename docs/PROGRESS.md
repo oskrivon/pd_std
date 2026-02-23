@@ -2,6 +2,34 @@
 
 ## Лог
 
+### 2026-02-23 (session 2)
+
+- **SQLite Task Queue Refactoring**:
+  - Полностью переписан task queue на SQLite (`core/task_db.py`)
+  - **Причина:** Multiple Orchestrator/TaskQueue instances causing sync issues
+  - **Решение:** Единая SQLite база + WAL mode для concurrent access
+
+  - Новые компоненты:
+    - `core/task_db.py` — SQLite-based TaskDB с thread-local connections
+    - Atomic `pop()` с UPDATE в одной транзакции
+    - `reset_stuck()` для crash recovery (IN_PROGRESS → PENDING)
+    - `from_json()` для миграции существующих задач
+
+  - Обновлённые компоненты:
+    - `core/daemon.py` — использует TaskDB, встроенная параллельная работа (до 4 workers)
+    - `web/app.py` — использует TaskDB напрямую, убраны все `reload()` вызовы
+    - `cli.py` — добавлена команда `migrate`, обновлены `tasks` и `add`
+
+  - Устранённые проблемы:
+    - ✅ Демон не подхватывал новые задачи (sync issue)
+    - ✅ Web dashboard показывал устаревшие данные
+    - ✅ Race conditions при параллельном выполнении
+    - ✅ Stuck tasks после crash
+
+  - Миграция: `ptero-studio migrate --archive`
+    - 36 задач перенесены из JSON в SQLite
+    - JSON заархивирован в `tasks.json.bak`
+
 ### 2026-02-23
 
 - **Worker Documentation Instructions** (`core/orchestrator.py`):

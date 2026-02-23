@@ -22,8 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.orchestrator import Orchestrator
-from core.project import Project, Engine
-from core.task_queue import TaskPriority
+from core.project import Project, Engine, discover_projects
+from core.task_db import TaskDB, Task, TaskStatus, TaskPriority, get_task_db
 
 
 def safe_print(text: str):
@@ -52,46 +52,51 @@ def cmd_projects(args, orch: Orchestrator):
 
 def cmd_tasks(args, orch: Orchestrator):
     """Show task queue."""
+    db = get_task_db(Path(args.workspace) / "studio" / "tasks.db")
     project = args.project if hasattr(args, 'project') else None
-    tasks = orch.tasks.all_tasks(project)
+
+    if project:
+        tasks = db.tasks_by_project(project)
+    else:
+        tasks = db.all_tasks()
 
     if not tasks:
         print("No tasks")
         return 0
 
     # Group by status
-    pending = [t for t in tasks if t.status.value == "pending"]
-    in_progress = [t for t in tasks if t.status.value == "in_progress"]
-    completed = [t for t in tasks if t.status.value == "completed"]
-    failed = [t for t in tasks if t.status.value == "failed"]
+    pending = [t for t in tasks if t.status == TaskStatus.PENDING]
+    in_progress = [t for t in tasks if t.status == TaskStatus.IN_PROGRESS]
+    completed = [t for t in tasks if t.status == TaskStatus.COMPLETED]
+    failed = [t for t in tasks if t.status == TaskStatus.FAILED]
 
     if in_progress:
         print("In Progress:")
         for t in in_progress:
-            print(f"  [{t.id}] {t.project}: {t.description}")
+            safe_print(f"  [{t.id}] {t.project}: {t.description[:60]}")
         print()
 
     if pending:
         print("Pending:")
-        for t in sorted(pending):
+        for t in sorted(pending, key=lambda x: -x.priority.value):
             prio = t.priority.name[0]  # First letter
-            print(f"  [{t.id}] ({prio}) {t.project}: {t.description}")
+            safe_print(f"  [{t.id}] ({prio}) {t.project}: {t.description[:60]}")
         print()
 
     if failed:
         print("Failed:")
         for t in failed:
-            print(f"  [{t.id}] {t.project}: {t.description}")
+            safe_print(f"  [{t.id}] {t.project}: {t.description[:60]}")
             if t.error:
-                print(f"         Error: {t.error[:60]}")
+                safe_print(f"         Error: {t.error[:60]}")
         print()
 
     if args.all and completed:
         print(f"Completed ({len(completed)}):")
         for t in completed[-5:]:  # Last 5
-            print(f"  [{t.id}] {t.project}: {t.description}")
+            safe_print(f"  [{t.id}] {t.project}: {t.description[:60]}")
 
-    stats = orch.tasks.stats()
+    stats = db.stats()
     print(f"\nTotal: {stats['total']} (pending: {stats['pending']}, completed: {stats['completed']})")
 
     return 0
@@ -99,6 +104,14 @@ def cmd_tasks(args, orch: Orchestrator):
 
 def cmd_add(args, orch: Orchestrator):
     """Add a task."""
+    db = get_task_db(Path(args.workspace) / "studio" / "tasks.db")
+    projects = {p.name: p for p in discover_projects(Path(args.workspace))}
+
+    if args.project not in projects:
+        print(f"Error: Project not found: {args.project}", file=sys.stderr)
+        print(f"Available: {list(projects.keys())}", file=sys.stderr)
+        return 1
+
     priority_map = {
         "critical": TaskPriority.CRITICAL,
         "high": TaskPriority.HIGH,
@@ -108,13 +121,15 @@ def cmd_add(args, orch: Orchestrator):
 
     priority = priority_map.get(args.priority, TaskPriority.NORMAL)
 
-    try:
-        task = orch.add_task(args.project, args.task, priority)
-        print(f"Added task [{task.id}]: {task.description}")
-        return 0
-    except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
+    task = Task(
+        project=args.project,
+        description=args.task,
+        priority=priority
+    )
+    db.add(task)
+
+    print(f"Added task [{task.id}]: {task.description}")
+    return 0
 
 
 def cmd_run(args, orch: Orchestrator):
@@ -379,15 +394,15 @@ def cmd_inbox(args, orch: Orchestrator):
             "low": "low"
         }.get(task.priority, "normal")
 
-        from core.task_queue import TaskPriority
         prio_enum = TaskPriority[priority.upper()]
 
-        new_task = orch.tasks.add(
+        db = get_task_db(Path(args.workspace) / "studio" / "tasks.db")
+        new_task = Task(
             project=task.project,
             description=prompt,
             priority=prio_enum
         )
-        orch.tasks.save()
+        db.add(new_task)
 
         print(f"  [OK] {task.title} -> {new_task.id}")
         imported += 1
@@ -417,6 +432,41 @@ def cmd_daemon(args, orch: Orchestrator):
     )
 
     daemon.run(max_tasks=args.max)
+    return 0
+
+
+def cmd_migrate(args, orch: Orchestrator):
+    """Migrate from JSON to SQLite."""
+    workspace = Path(args.workspace)
+    json_path = workspace / "studio" / "tasks.json"
+    db_path = workspace / "studio" / "tasks.db"
+
+    if not json_path.exists():
+        print(f"No JSON file found: {json_path}")
+        return 0
+
+    if db_path.exists() and not args.force:
+        print(f"SQLite database already exists: {db_path}")
+        print("Use --force to overwrite")
+        return 1
+
+    if db_path.exists():
+        db_path.unlink()
+
+    print(f"Migrating from {json_path} to {db_path}...")
+    db = TaskDB.from_json(json_path, db_path)
+
+    stats = db.stats()
+    print(f"Done! Migrated {stats['total']} tasks")
+    print(f"  Pending: {stats['pending']}")
+    print(f"  Completed: {stats['completed']}")
+    print(f"  Failed: {stats['failed']}")
+
+    if args.archive:
+        archive_path = json_path.with_suffix(".json.bak")
+        json_path.rename(archive_path)
+        print(f"Archived JSON to: {archive_path}")
+
     return 0
 
 
@@ -522,6 +572,11 @@ Examples:
     inbox_parser.add_argument("--new", metavar="TITLE", help="Create new task template")
     inbox_parser.add_argument("--project", default="backpack_hero", help="Project for new template")
 
+    # migrate - JSON to SQLite migration
+    migrate_parser = subparsers.add_parser("migrate", help="Migrate tasks from JSON to SQLite")
+    migrate_parser.add_argument("--force", "-f", action="store_true", help="Overwrite existing database")
+    migrate_parser.add_argument("--archive", "-a", action="store_true", help="Archive JSON file after migration")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -545,7 +600,8 @@ Examples:
         "test": cmd_test,
         "daemon": cmd_daemon,
         "inbox": cmd_inbox,
-        "web": cmd_web
+        "web": cmd_web,
+        "migrate": cmd_migrate
     }
 
     handler = commands.get(args.command)

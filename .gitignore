@@ -56,3 +56,10 @@ tmp/
 temp/
 *.tmp
 *.json
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+*.bak
+nul
