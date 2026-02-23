@@ -138,6 +138,18 @@ async def stats_partial(request: Request):
     })
 
 
+@app.get("/partials/in-progress", response_class=HTMLResponse)
+async def in_progress_partial(request: Request):
+    """In-progress tasks partial for polling updates."""
+    tasks = db.all_tasks()
+    in_progress = [t for t in tasks if t.status == TaskStatus.IN_PROGRESS]
+
+    return templates.TemplateResponse("partials/in_progress.html", {
+        "request": request,
+        "in_progress": in_progress
+    })
+
+
 # ============ Actions ============
 
 @app.post("/tasks/add", response_class=HTMLResponse)

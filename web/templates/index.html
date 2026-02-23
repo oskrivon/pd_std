@@ -42,8 +42,13 @@
     </div>
 
     <!-- Stats cards -->
-    <div id="stats-cards" class="grid grid-cols-4 gap-4" hx-get="/partials/stats" hx-trigger="every 10s" hx-swap="innerHTML">
+    <div id="stats-cards" class="grid grid-cols-4 gap-4" hx-get="/partials/stats" hx-trigger="every 5s" hx-swap="innerHTML">
         {% include "partials/stats.html" %}
+    </div>
+
+    <!-- In Progress tasks -->
+    <div id="in-progress-section" hx-get="/partials/in-progress" hx-trigger="every 5s" hx-swap="innerHTML">
+        {% include "partials/in_progress.html" %}
     </div>
 
     <!-- Main grid -->

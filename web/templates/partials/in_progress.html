@@ -1,0 +1,41 @@
+<!-- In Progress tasks partial - auto-refreshed by HTMX -->
+{% if in_progress %}
+<div class="bg-gradient-to-r from-blue-900/50 to-purple-900/50 border border-blue-500/30 rounded-lg p-4">
+    <div class="flex items-center space-x-2 mb-3">
+        <div class="relative">
+            <span class="absolute inline-flex h-3 w-3 rounded-full bg-blue-400 opacity-75 animate-ping"></span>
+            <span class="relative inline-flex h-3 w-3 rounded-full bg-blue-500"></span>
+        </div>
+        <h2 class="text-lg font-semibold text-blue-300">Running Tasks ({{ in_progress|length }})</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% for task in in_progress %}
+        <div class="bg-gray-800/80 rounded-lg p-3 border-l-4 border-blue-500 hover:border-blue-400 transition-colors">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs px-2 py-0.5 rounded bg-blue-600/50 text-blue-200 font-medium">{{ task.project }}</span>
+                    {% if task.priority.name == "CRITICAL" %}
+                    <span class="text-xs px-2 py-0.5 rounded bg-red-600/50 text-red-200">!</span>
+                    {% elif task.priority.name == "HIGH" %}
+                    <span class="text-xs px-2 py-0.5 rounded bg-orange-600/50 text-orange-200">H</span>
+                    {% endif %}
+                </div>
+                <span class="text-xs text-gray-500 font-mono">{{ task.id }}</span>
+            </div>
+            <p class="text-sm text-gray-200 leading-relaxed">{{ task.description[:150] }}{% if task.description|length > 150 %}...{% endif %}</p>
+            {% if task.started_at %}
+            <div class="mt-3 flex items-center justify-between text-xs">
+                <div class="flex items-center text-gray-500">
+                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>{{ task.started_at[:19].replace('T', ' ') }}</span>
+                </div>
+                <span class="text-blue-400 font-medium" data-started="{{ task.started_at }}">Running...</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
