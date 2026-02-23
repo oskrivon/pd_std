@@ -233,6 +233,9 @@ class Daemon:
                 batch_size = min(pending, max_tasks or 100)
                 results = executor.run(max_tasks=batch_size)
 
+                # Reload task queue to sync with executor's changes
+                self.orch.tasks.reload()
+
                 for r in results:
                     if r.success:
                         self.stats["tasks_completed"] += 1
