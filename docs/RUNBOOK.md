@@ -64,8 +64,15 @@ python -m studio.cli run backpack_hero
 ### Daemon mode (непрерывно)
 
 ```bash
-python -m studio.cli daemon --budget 1000000  # токенов
+python -m studio.cli daemon                    # базовый запуск
+python -m studio.cli daemon --workers 2        # 2 параллельных воркера
+python -m studio.cli daemon --no-analyze       # без Opus анализа
+python -m studio.cli daemon --no-reset         # не сбрасывать IN_PROGRESS задачи
 ```
+
+**Таймауты:**
+- Idle timeout: 90 сек (убивает если нет вывода)
+- Max timeout: 10 мин (абсолютный лимит)
 
 ### Создание нового проекта
 
@@ -77,6 +84,33 @@ python -m studio.cli init "tower_defense" --engine love --style "pixel art"
 
 ```bash
 python -m studio.cli status
+```
+
+### Web Dashboard
+
+```bash
+python -m studio.cli web
+# Открыть http://127.0.0.1:8000
+```
+
+### Генерация тест-плана
+
+```bash
+# CLI
+python -m studio.cli test-plan backpack_hero --commits 5
+python -m studio.cli test-plan backpack_hero --save  # сохранить в docs/TEST_PLAN.md
+
+# Или через dashboard: http://127.0.0.1:8000/test-plan/backpack_hero
+```
+
+### Импорт задач из markdown
+
+```bash
+# Создать шаблон задачи
+python -m studio.cli inbox --new "Моя задача" --project backpack_hero
+
+# Импортировать все задачи из tasks_inbox/
+python -m studio.cli inbox
 ```
 
 ## Сервисы
@@ -123,6 +157,9 @@ python -m studio.cli budget
 | `Rate limit exceeded` | Слишком много запросов | Добавить задержку или снизить параллелизм |
 | `Daemon stopped unexpectedly` | Exception в задаче | Проверить logs/daemon.log |
 | `Window not found` | Игра не запустилась | Проверить логи запуска игры |
+| `Task idle timeout` | Задача зависла без вывода | Проверить что Claude CLI работает, увеличить idle timeout |
+| `IN_PROGRESS tasks reset` | Daemon перезапустился | Использовать `--no-reset` или запускать из dashboard |
+| `Test plan timeout` | Claude CLI долго генерирует | Подождать до 5 мин, проверить сеть |
 
 ## Восстановление
 

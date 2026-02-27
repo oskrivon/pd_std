@@ -2,6 +2,31 @@
 
 ## Лог
 
+### 2026-02-27
+
+- **Test Plan Generator** (`tools/test_planner.py`):
+  - Генерация тест-планов на основе git diff и PROGRESS.md
+  - Использует Claude CLI (Opus) — входит в подписку, не API токены
+  - CLI: `ptero-studio test-plan <project> [--commits N] [--save]`
+  - Dashboard: `/test-plan/{project}` с анимацией загрузки
+  - Результат сохраняется в `docs/TEST_PLAN.md`
+
+- **Dashboard Fixes**:
+  - ✅ Форма очищается после добавления задачи (`hx-on::after-request`)
+  - ✅ IN_PROGRESS задачи не сбрасываются при перезапуске daemon (`--no-reset`)
+  - ✅ Секция "Test Plans" с кнопками генерации для каждого проекта
+
+- **Idle Timeout** (`core/daemon.py`):
+  - **Проблема:** Фиксированный таймаут 3 мин убивал работающие задачи
+  - **Решение:** Idle timeout 90 сек (убивает только если нет вывода)
+  - Max timeout 10 мин как safety limit
+  - Non-blocking read через threading
+
+- **Markdown Task Inbox** (`core/md_tasks.py`):
+  - Импорт задач из markdown файлов
+  - CLI: `ptero-studio inbox [--new TITLE]`
+  - Папка `tasks_inbox/` для шаблонов и референсов
+
 ### 2026-02-23 (session 2)
 
 - **Fix: Claude CLI hanging** (`core/daemon.py`, `core/analyzer.py`):
