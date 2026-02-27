@@ -428,10 +428,42 @@ def cmd_daemon(args, orch: Orchestrator):
         analyze=not getattr(args, 'no_analyze', False),
         max_consecutive_failures=args.max_failures,
         log_to_file=not getattr(args, 'no_log', False),
-        workers=getattr(args, 'workers', 1)
+        workers=getattr(args, 'workers', 1),
+        reset_stuck=not getattr(args, 'no_reset', False)
     )
 
     daemon.run(max_tasks=args.max)
+    return 0
+
+
+def cmd_test_plan(args, orch: Orchestrator):
+    """Generate test plan for a project."""
+    from tools.test_planner import generate_test_plan, save_test_plan
+
+    project = orch.get_project(args.project)
+    if not project:
+        print(f"Project not found: {args.project}", file=sys.stderr)
+        return 1
+
+    print(f"Generating test plan for {args.project} (last {args.commits} commits)...")
+    print("Using Claude CLI (Opus)...\n")
+
+    plan = generate_test_plan(
+        project=args.project,
+        commits=args.commits,
+        workspace=Path(args.workspace)
+    )
+
+    if plan.startswith("Error:"):
+        print(plan, file=sys.stderr)
+        return 1
+
+    safe_print(plan)
+
+    if args.save:
+        filepath = save_test_plan(args.project, plan, Path(args.workspace))
+        print(f"\nSaved to: {filepath}")
+
     return 0
 
 
@@ -559,6 +591,7 @@ Examples:
     daemon_parser.add_argument("--max-failures", type=int, default=3, help="Stop after N consecutive failures")
     daemon_parser.add_argument("--no-log", action="store_true", help="Disable file logging")
     daemon_parser.add_argument("--workers", "-w", type=int, default=1, help="Parallel workers (1-4, default 1)")
+    daemon_parser.add_argument("--no-reset", action="store_true", help="Don't reset stuck tasks on start")
 
     # web - dashboard
     web_parser = subparsers.add_parser("web", help="Start web dashboard")
@@ -571,6 +604,12 @@ Examples:
     inbox_parser.add_argument("--no-archive", action="store_true", help="Don't move processed files to archive")
     inbox_parser.add_argument("--new", metavar="TITLE", help="Create new task template")
     inbox_parser.add_argument("--project", default="backpack_hero", help="Project for new template")
+
+    # test-plan - generate test plan
+    test_plan_parser = subparsers.add_parser("test-plan", help="Generate test plan for a project")
+    test_plan_parser.add_argument("project", help="Project name")
+    test_plan_parser.add_argument("--commits", "-c", type=int, default=5, help="Number of commits to analyze (default 5)")
+    test_plan_parser.add_argument("--save", "-s", action="store_true", help="Save to docs/TEST_PLAN_YYYY-MM-DD.md")
 
     # migrate - JSON to SQLite migration
     migrate_parser = subparsers.add_parser("migrate", help="Migrate tasks from JSON to SQLite")
@@ -601,6 +640,7 @@ Examples:
         "daemon": cmd_daemon,
         "inbox": cmd_inbox,
         "web": cmd_web,
+        "test-plan": cmd_test_plan,
         "migrate": cmd_migrate
     }
 

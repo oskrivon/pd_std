@@ -48,7 +48,8 @@ class Daemon:
         analyze: bool = True,
         max_consecutive_failures: int = 3,
         log_to_file: bool = True,
-        workers: int = 1
+        workers: int = 1,
+        reset_stuck: bool = True
     ):
         self.workspace = Path(workspace)
         self.poll_interval = poll_interval
@@ -56,6 +57,7 @@ class Daemon:
         self.analyze = analyze
         self.max_consecutive_failures = max_consecutive_failures
         self.workers = min(workers, 4)  # Cap at 4
+        self.reset_stuck_on_start = reset_stuck
 
         # Setup logging
         self.log_dir = self.workspace / "studio" / "logs"
@@ -95,8 +97,9 @@ class Daemon:
         self._running = True
         self._setup_signal_handlers()
 
-        # Reset stuck tasks from previous crashed runs
-        self.db.reset_stuck()
+        # Reset stuck tasks from previous crashed runs (optional)
+        if self.reset_stuck_on_start:
+            self.db.reset_stuck()
 
         self.stats["started_at"] = datetime.now().isoformat()
         tasks_executed = 0
@@ -357,10 +360,12 @@ class Daemon:
             return None
 
     def _run_claude_code(self, task: Task, project: Project) -> dict:
-        """Run Claude Code to execute the task."""
+        """Run Claude Code to execute the task with idle timeout."""
         import subprocess
         import shutil
         import sys
+        import threading
+        from queue import Queue, Empty
 
         claude_cmd = shutil.which("claude") or shutil.which("claude.cmd")
         if not claude_cmd:
@@ -398,7 +403,20 @@ DO NOT ask for clarification - make reasonable assumptions and proceed.
 """
 
         cmd = [claude_cmd, "--print", "--dangerously-skip-permissions"]
-        timeout_seconds = 180  # 3 minutes (reduced from 5)
+
+        # Timeout settings
+        idle_timeout = 90  # Kill if no output for 90 seconds
+        max_timeout = 600  # Absolute max 10 minutes
+
+        def reader_thread(pipe, queue, name):
+            """Read from pipe and put lines into queue."""
+            try:
+                for line in iter(pipe.readline, ''):
+                    if line:
+                        queue.put((name, line))
+                pipe.close()
+            except Exception as e:
+                queue.put(('error', str(e)))
 
         try:
             # Use CREATE_NEW_PROCESS_GROUP on Windows for proper killing
@@ -418,19 +436,79 @@ DO NOT ask for clarification - make reasonable assumptions and proceed.
                 creationflags=creationflags
             )
 
-            stdout, stderr = proc.communicate(input=prompt, timeout=timeout_seconds)
+            # Send prompt and close stdin
+            proc.stdin.write(prompt)
+            proc.stdin.close()
+
+            # Start reader threads
+            output_queue = Queue()
+            stdout_thread = threading.Thread(
+                target=reader_thread,
+                args=(proc.stdout, output_queue, 'stdout'),
+                daemon=True
+            )
+            stderr_thread = threading.Thread(
+                target=reader_thread,
+                args=(proc.stderr, output_queue, 'stderr'),
+                daemon=True
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+
+            # Collect output with idle timeout
+            stdout_lines = []
+            stderr_lines = []
+            start_time = time.time()
+            last_activity = time.time()
+
+            while proc.poll() is None:
+                elapsed = time.time() - start_time
+                idle_time = time.time() - last_activity
+
+                # Check absolute max timeout
+                if elapsed > max_timeout:
+                    self._kill_process_tree(proc.pid)
+                    proc.kill()
+                    return {"success": False, "error": f"Task timed out (max {max_timeout // 60} minutes)"}
+
+                # Check idle timeout
+                if idle_time > idle_timeout:
+                    self._kill_process_tree(proc.pid)
+                    proc.kill()
+                    return {"success": False, "error": f"Task idle timeout ({idle_timeout}s no output)"}
+
+                # Read available output
+                try:
+                    source, line = output_queue.get(timeout=1.0)
+                    last_activity = time.time()
+                    if source == 'stdout':
+                        stdout_lines.append(line)
+                    elif source == 'stderr':
+                        stderr_lines.append(line)
+                except Empty:
+                    continue
+
+            # Process finished, drain remaining output
+            stdout_thread.join(timeout=2)
+            stderr_thread.join(timeout=2)
+
+            while not output_queue.empty():
+                try:
+                    source, line = output_queue.get_nowait()
+                    if source == 'stdout':
+                        stdout_lines.append(line)
+                    elif source == 'stderr':
+                        stderr_lines.append(line)
+                except Empty:
+                    break
+
+            stdout = ''.join(stdout_lines)
+            stderr = ''.join(stderr_lines)
 
             if proc.returncode == 0:
                 return {"success": True, "output": stdout}
             else:
                 return {"success": False, "error": stderr or "Non-zero exit code"}
-
-        except subprocess.TimeoutExpired:
-            # Kill process tree
-            self._kill_process_tree(proc.pid)
-            proc.kill()
-            proc.wait()
-            return {"success": False, "error": f"Task timed out ({timeout_seconds // 60} minutes)"}
 
         except Exception as e:
             return {"success": False, "error": str(e)}

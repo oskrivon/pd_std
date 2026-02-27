@@ -242,7 +242,8 @@ async def start_daemon(request: Request, workers: int = Form(1)):
     cmd = [
         sys.executable, "cli.py", "daemon",
         "--workers", str(workers),
-        "--no-analyze"
+        "--no-analyze",
+        "--no-reset"
     ]
 
     daemon_process = subprocess.Popen(
@@ -315,6 +316,168 @@ async def api_stats():
     stats = db.stats()
     stats["daemon_running"] = daemon_process is not None and daemon_process.poll() is None
     return stats
+
+
+@app.get("/api/test-plan/{project}")
+async def api_test_plan(project: str, commits: int = 5):
+    """Generate test plan for a project."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from tools.test_planner import generate_test_plan
+
+    if project not in projects:
+        return {"error": f"Project not found: {project}"}
+
+    plan = generate_test_plan(
+        project=project,
+        commits=commits,
+        workspace=WORKSPACE
+    )
+
+    return {"project": project, "commits": commits, "plan": plan}
+
+
+@app.get("/test-plan/{project}", response_class=HTMLResponse)
+async def test_plan_page(request: Request, project: str, commits: int = 5):
+    """Test plan page - shows loading then redirects to file."""
+    if project not in projects:
+        return HTMLResponse(f"Project not found: {project}", status_code=404)
+
+    # Show loading page that triggers generation
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Generating Test Plan - {project}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    </head>
+    <body class="bg-gray-900 text-gray-100 p-8">
+        <div class="max-w-2xl mx-auto text-center">
+            <h1 class="text-2xl font-bold mb-6">Generating Test Plan</h1>
+            <div class="bg-gray-800 rounded-lg p-8">
+                <div id="status" hx-get="/test-plan/{project}/generate?commits={commits}" hx-trigger="load" hx-swap="innerHTML">
+                    <div class="animate-pulse">
+                        <div class="text-6xl mb-4">🤖</div>
+                        <p class="text-lg text-purple-400">Claude is analyzing {commits} commits...</p>
+                        <p class="text-sm text-gray-500 mt-2">This may take 1-2 minutes</p>
+                        <div class="mt-6 flex justify-center">
+                            <div class="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <a href="/" class="text-blue-400 hover:underline mt-6 inline-block">Cancel and return to Dashboard</a>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
+
+
+@app.get("/test-plan/{project}/generate", response_class=HTMLResponse)
+async def test_plan_generate(project: str, commits: int = 5):
+    """Actually generate the test plan (called by HTMX)."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from tools.test_planner import generate_test_plan
+
+    plan = generate_test_plan(
+        project=project,
+        commits=commits,
+        workspace=WORKSPACE
+    )
+
+    if plan.startswith("Error:"):
+        return HTMLResponse(f"""
+            <div class="text-red-400">
+                <div class="text-6xl mb-4">❌</div>
+                <p class="text-lg">Generation failed</p>
+                <p class="text-sm mt-2">{plan}</p>
+                <a href="/" class="text-blue-400 hover:underline mt-4 inline-block">Back to Dashboard</a>
+            </div>
+        """)
+
+    # Check if file was created
+    test_plan_path = WORKSPACE / project / "docs" / "TEST_PLAN.md"
+    if test_plan_path.exists():
+        return HTMLResponse(f"""
+            <div class="text-green-400">
+                <div class="text-6xl mb-4">✅</div>
+                <p class="text-lg">Test Plan Generated!</p>
+                <p class="text-sm text-gray-400 mt-2">Saved to: docs/TEST_PLAN.md</p>
+                <div class="mt-6 space-x-4">
+                    <a href="/test-plan/{project}/view" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg inline-block">View Plan</a>
+                    <a href="/" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg inline-block">Back to Dashboard</a>
+                </div>
+            </div>
+        """)
+    else:
+        # Plan returned in stdout
+        return HTMLResponse(f"""
+            <div class="text-green-400">
+                <div class="text-6xl mb-4">✅</div>
+                <p class="text-lg">Test Plan Generated!</p>
+                <div class="mt-6">
+                    <a href="/" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg inline-block">Back to Dashboard</a>
+                </div>
+                <div class="mt-6 text-left bg-gray-700 rounded p-4 max-h-96 overflow-y-auto">
+                    <pre class="text-xs text-gray-300 whitespace-pre-wrap">{plan[:2000]}...</pre>
+                </div>
+            </div>
+        """)
+
+
+@app.get("/test-plan/{project}/view", response_class=HTMLResponse)
+async def test_plan_view(request: Request, project: str):
+    """View existing test plan file."""
+    import markdown
+
+    test_plan_path = WORKSPACE / project / "docs" / "TEST_PLAN.md"
+
+    if not test_plan_path.exists():
+        return HTMLResponse(f"Test plan not found. <a href='/test-plan/{project}'>Generate one</a>", status_code=404)
+
+    content = test_plan_path.read_text(encoding='utf-8')
+
+    try:
+        plan_html = markdown.markdown(content, extensions=['tables', 'fenced_code', 'toc'])
+    except:
+        plan_html = f"<pre>{content}</pre>"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Test Plan - {project}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>
+            .prose table {{ width: 100%; border-collapse: collapse; }}
+            .prose th, .prose td {{ border: 1px solid #374151; padding: 8px; text-align: left; }}
+            .prose th {{ background: #1f2937; }}
+            .prose h2 {{ margin-top: 2rem; color: #a78bfa; }}
+            .prose h3 {{ margin-top: 1.5rem; color: #60a5fa; }}
+            .prose code {{ background: #374151; padding: 2px 6px; border-radius: 4px; }}
+            .prose pre {{ background: #1f2937; padding: 1rem; border-radius: 8px; overflow-x: auto; }}
+        </style>
+    </head>
+    <body class="bg-gray-900 text-gray-100 p-8">
+        <div class="max-w-5xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">Test Plan: {project}</h1>
+                <div class="space-x-3">
+                    <a href="/test-plan/{project}" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm">Regenerate</a>
+                    <a href="/" class="text-blue-400 hover:underline">Dashboard</a>
+                </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-6 prose prose-invert max-w-none">
+                {plan_html}
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html)
 
 
 if __name__ == "__main__":

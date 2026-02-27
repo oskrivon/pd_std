@@ -56,7 +56,7 @@
         <!-- Add task form -->
         <div class="col-span-1 bg-gray-800 rounded-lg p-4">
             <h2 class="text-lg font-semibold mb-4">➕ New Task</h2>
-            <form hx-post="/tasks/add" hx-target="#pending-tasks" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="space-y-4">
+            <form hx-post="/tasks/add" hx-target="#pending-tasks" hx-swap="innerHTML" hx-encoding="multipart/form-data" hx-on::after-request="if(event.detail.successful) this.reset()" class="space-y-4">
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">Project</label>
                     <select name="project" class="w-full bg-gray-700 rounded px-3 py-2 text-white">
@@ -117,6 +117,26 @@
                 {% endfor %}
             </div>
         </div>
+    </div>
+
+    <!-- Test Plans -->
+    <div class="bg-gray-800 rounded-lg p-4">
+        <h2 class="text-lg font-semibold mb-4">📝 Test Plans</h2>
+        <div class="flex flex-wrap gap-3">
+            {% for p in projects %}
+            <div class="flex items-center space-x-2 bg-gray-700 rounded-lg px-3 py-2">
+                <span class="text-sm">{{ p.name }}</span>
+                <a
+                    href="/test-plan/{{ p.name }}"
+                    target="_blank"
+                    class="px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs"
+                >
+                    Generate
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        <p class="text-xs text-gray-500 mt-3">Opens in new tab. Uses Claude CLI (Opus) to analyze git changes.</p>
     </div>
 
     <!-- Recent activity -->
