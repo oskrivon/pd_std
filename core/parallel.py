@@ -13,7 +13,7 @@ Usage:
 
 import time
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
@@ -105,10 +105,9 @@ class ParallelExecutor:
                     # No running tasks and no more tasks to submit
                     break
 
-                # Wait for any task to complete
-                done_futures = []
-                for future in as_completed(futures, timeout=1):
-                    done_futures.append(future)
+                # Wait for any task to complete (no timeout exception)
+                done, _ = wait(futures.keys(), timeout=5, return_when=FIRST_COMPLETED)
+                done_futures = list(done)
 
                 # Process completed tasks
                 for future in done_futures:
