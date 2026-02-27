@@ -431,8 +431,6 @@ async def test_plan_generate(project: str, commits: int = 5):
 @app.get("/test-plan/{project}/view", response_class=HTMLResponse)
 async def test_plan_view(request: Request, project: str):
     """View existing test plan file."""
-    import markdown
-
     test_plan_path = WORKSPACE / project / "docs" / "TEST_PLAN.md"
 
     if not test_plan_path.exists():
@@ -440,10 +438,15 @@ async def test_plan_view(request: Request, project: str):
 
     content = test_plan_path.read_text(encoding='utf-8')
 
+    # Try to use markdown module, fallback to pre
     try:
+        import markdown
         plan_html = markdown.markdown(content, extensions=['tables', 'fenced_code', 'toc'])
-    except:
-        plan_html = f"<pre>{content}</pre>"
+    except ImportError:
+        # Simple markdown-like conversion for tables
+        import html
+        escaped = html.escape(content)
+        plan_html = f"<pre style='white-space: pre-wrap;'>{escaped}</pre>"
 
     html = f"""
     <!DOCTYPE html>
