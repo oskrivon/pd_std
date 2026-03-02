@@ -2,6 +2,30 @@
 
 ## Лог
 
+### 2026-03-02
+
+- **Concept Generator Tool** (`tools/concept_gen/`):
+  - Новый модуль для генерации концептов по референсам через AIML API
+  - `analyze_reference()` — GPT-4o Vision анализирует референсы (стиль, цвета, настроение)
+  - `generate_image()` — Flux/DALL-E генерирует концепты
+  - `generate_concepts()` — batch-обработка папки референсов
+  - CLI: `python -m tools.concept_gen.generator analyze|generate|quick`
+  - Конфиг: `AIMLAPI_KEY` в `config/.env`
+
+- **Исследование моделей для UI генерации**:
+  - Протестированы: `flux/schnell`, `flux-pro`, `dall-e-3`
+  - **flux/schnell** — быстрый, дешёвый, для итераций
+  - **flux-pro** — детальный, понимает UI структуру, читаемый текст
+  - **dall-e-3** — не работает через aimlapi (400 error)
+  - **Вывод:** flux-pro лучший для UI/интерфейсов
+
+- **UI Layout Workflow для backpack_hero**:
+  - Референс: Into the Breach (UI стиль) + backpack_hero (компоновка)
+  - Три зоны: Backpack (лево), Mining Field (право-верх), Cave Room (низ)
+  - Тёмная схема: #1a1a2e фон, cyan borders, orange accents
+  - Сгенерированы 3 финальных варианта V3.2 Dark
+  - Результаты: `studio/test_output/v3.2_dark_*.png`
+
 ### 2026-02-27
 
 - **Test Plan Generator** (`tools/test_planner.py`):
