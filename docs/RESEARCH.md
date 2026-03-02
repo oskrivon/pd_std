@@ -5,7 +5,24 @@
 - [Window Capture Methods](WINDOW_CAPTURE_RESEARCH.md) — сравнение методов захвата окна игры (в процессе)
 - [UI Concept Generation](UI_GENERATION_RESEARCH.md) — модели и workflow для генерации UI концептов
 
+## Завершённые исследования
+
+- [Style Transfer Pipeline](STYLE_TRANSFER_RESEARCH.md) — AI img2img + алгоритмическая стилизация в стиле Deceiver/Loop Hero
+
 ## Решения
+
+### Style Transfer Pipeline — 2026-03-03
+**Контекст:** Нужно стилизовать скриншоты игры в стиле Deceiver (Loop Hero)
+**Протестированы:**
+1. `gemini-pro` — лучший, сохраняет layout, понимает промпты
+2. `flux-lora-edit` — хорош с LoRA, требует настройки
+3. `reve-remix` — альтернатива, хорошо сохраняет композицию
+4. `qwen-edit` — надёжный baseline
+5. `flux-kontext` — не подходит (объединяет изображения)
+6. `flux-edit` — не подходит (генерирует новое)
+**Решение:** Комбинированный пайплайн: Gemini Pro → Алгоритмическая обработка → UI маска
+**Почему:** Gemini Pro сохраняет композицию, алгоритм добавляет палитру Deceiver, маска защищает UI
+**Инструмент:** `tools/style_transfer/pipeline.py --ai-model gemini-pro --ui-mask backpack_hero_minimal`
 
 ### AI модели для UI генерации — 2026-03-02
 **Контекст:** Нужно генерировать концепты UI/интерфейсов для игр

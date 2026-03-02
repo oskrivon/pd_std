@@ -2,6 +2,33 @@
 
 ## Лог
 
+### 2026-03-03
+
+- **Style Transfer Pipeline** (`tools/style_transfer/`):
+  - Комбинированный пайплайн: AI img2img + алгоритмическая обработка + UI маска
+  - `ai_style_transfer.py` — поддержка 10+ моделей через AIML API
+  - `deceiver_style.py` — алгоритмическая стилизация (палитра, dithering)
+  - `pipeline.py` — объединяет все этапы
+  - `ui_mask.py` — маскирование UI для сохранения читаемости
+
+- **Исследование AI img2img моделей**:
+  - **gemini-pro** — 🥇 лучший (сохраняет layout, понимает промпты)
+  - **flux-lora-edit** — 🥈 хорош с LoRA пресетами
+  - **reve-remix** — 🥉 альтернатива
+  - **qwen-edit** — надёжный baseline
+  - **flux-kontext** — ❌ объединяет изображения
+  - **flux-edit** — ❌ генерирует новое вместо трансформации
+  - **Критичный баг исправлен:** `image_urls` (массив) vs `image_url` (строка)
+
+- **LoRA поддержка**:
+  - HuggingFace пресеты: `retro-pixel`, `modern-pixel`, `pixel-art-xl`
+  - CLI: `--lora-preset retro-pixel` или `--lora-url <url>`
+
+- **Рекомендуемый пайплайн**:
+  ```bash
+  python pipeline.py input.png output.png --ai-model gemini-pro --ui-mask backpack_hero_minimal
+  ```
+
 ### 2026-03-02
 
 - **Concept Generator Tool** (`tools/concept_gen/`):
