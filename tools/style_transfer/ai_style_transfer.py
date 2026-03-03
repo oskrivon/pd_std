@@ -173,9 +173,43 @@ def _get_api_key() -> Optional[str]:
     return None
 
 
+def _validate_image_file(path: str) -> tuple[bool, Optional[str]]:
+    """
+    Проверить, что файл является валидным изображением.
+
+    Returns:
+        (True, None) если валидно, (False, error_message) если нет
+    """
+    file_path = Path(path)
+
+    if not file_path.exists():
+        return False, f"Файл не существует: {path}"
+
+    # Проверка минимального размера (PNG header минимум 67 байт)
+    file_size = file_path.stat().st_size
+    if file_size < 50:
+        return False, f"Файл слишком мал ({file_size} байт), вероятно битый: {path}"
+
+    # Попытка открыть и проверить через PIL
+    try:
+        from PIL import Image
+        with Image.open(path) as img:
+            img.verify()
+        with Image.open(path) as img:
+            _ = img.size
+        return True, None
+    except Exception as e:
+        return False, f"Не удалось открыть изображение: {e}"
+
+
 def _load_image_base64(image_path: str) -> tuple[str, str]:
     """Загрузить изображение в base64."""
     path = Path(image_path)
+
+    # Валидация перед загрузкой
+    is_valid, error = _validate_image_file(image_path)
+    if not is_valid:
+        raise ValueError(error)
 
     if not path.exists():
         raise FileNotFoundError(f"Image not found: {image_path}")
@@ -197,24 +231,67 @@ def _load_image_base64(image_path: str) -> tuple[str, str]:
 
 
 def _upload_to_temp_hosting(image_path: str) -> Optional[str]:
-    """Загрузить изображение на временный хостинг 0x0.st."""
-    try:
-        headers = {
-            "User-Agent": "curl/8.0.0"  # 0x0.st требует curl-like User-Agent
-        }
-        with open(image_path, "rb") as f:
-            response = requests.post(
-                "https://0x0.st",
-                files={"file": f},
-                headers=headers,
-                timeout=60
-            )
-        if response.status_code == 200:
-            return response.text.strip()
-        else:
-            print(f"Upload failed: {response.status_code} - {response.text[:100]}")
-    except Exception as e:
-        print(f"Upload error: {e}")
+    """Загрузить изображение на временный хостинг (с fallback)."""
+
+    # Список хостингов для попытки (в порядке приоритета)
+    hostings = [
+        ("catbox.moe", _upload_to_catbox),
+        ("litterbox", _upload_to_litterbox),
+        ("0x0.st", _upload_to_0x0),
+    ]
+
+    for name, upload_fn in hostings:
+        try:
+            url = upload_fn(image_path)
+            if url:
+                return url
+        except Exception as e:
+            print(f"  {name} failed: {e}")
+            continue
+
+    return None
+
+
+def _upload_to_catbox(image_path: str) -> Optional[str]:
+    """Загрузить на catbox.moe (постоянный хостинг)."""
+    with open(image_path, "rb") as f:
+        response = requests.post(
+            "https://catbox.moe/user/api.php",
+            data={"reqtype": "fileupload"},
+            files={"fileToUpload": f},
+            timeout=60
+        )
+    if response.status_code == 200 and response.text.startswith("http"):
+        return response.text.strip()
+    return None
+
+
+def _upload_to_litterbox(image_path: str) -> Optional[str]:
+    """Загрузить на litterbox.catbox.moe (временный, 1 час)."""
+    with open(image_path, "rb") as f:
+        response = requests.post(
+            "https://litterbox.catbox.moe/resources/internals/api.php",
+            data={"reqtype": "fileupload", "time": "1h"},
+            files={"fileToUpload": f},
+            timeout=60
+        )
+    if response.status_code == 200 and response.text.startswith("http"):
+        return response.text.strip()
+    return None
+
+
+def _upload_to_0x0(image_path: str) -> Optional[str]:
+    """Загрузить на 0x0.st."""
+    headers = {"User-Agent": "curl/8.0.0"}
+    with open(image_path, "rb") as f:
+        response = requests.post(
+            "https://0x0.st",
+            files={"file": f},
+            headers=headers,
+            timeout=30
+        )
+    if response.status_code == 200:
+        return response.text.strip()
     return None
 
 
@@ -339,7 +416,7 @@ def ai_style_transfer(
     # Загрузка изображения
     try:
         image_data, media_type = _load_image_base64(input_path)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         return StyleTransferResult(success=False, error=str(e))
 
     # Получение пресета стиля
@@ -353,35 +430,29 @@ def ai_style_transfer(
     # Модель
     model_id = MODELS.get(model, MODELS[DEFAULT_MODEL])
 
-    # Для моделей требующих URL - загружаем на временный хостинг
-    image_url = None
+    # Используем data URL (base64) напрямую — не нужен внешний хостинг!
+    image_url = f"data:{media_type};base64,{image_data}"
     style_ref_url = None
 
-    # Модели требующие URL (не base64) — URL быстрее и надёжнее
-    url_required_models = ["qwen", "flux", "reve", "seedream", "gemini"]
-    if any(m in model_id.lower() for m in url_required_models):
-        if debug:
-            print("Uploading image to temp hosting...")
-        image_url = _upload_to_temp_hosting(input_path)
-        if not image_url:
-            return StyleTransferResult(
-                success=False,
-                error="Не удалось загрузить изображение на временный хостинг"
-            )
-        if debug:
-            print(f"Uploaded: {image_url}")
+    if debug:
+        print(f"Using data URL (base64), size: {len(image_data) // 1024}KB")
 
-        # Загружаем style reference если указан и модель поддерживает
-        if style_reference and model in MULTI_REF_MODELS:
-            if Path(style_reference).exists():
+    # Загружаем style reference если указан
+    if style_reference and model in MULTI_REF_MODELS:
+        if Path(style_reference).exists():
+            if debug:
+                print(f"Loading style reference: {style_reference}")
+            try:
+                ref_data, ref_type = _load_image_base64(style_reference)
+                style_ref_url = f"data:{ref_type};base64,{ref_data}"
                 if debug:
-                    print(f"Uploading style reference: {style_reference}")
-                style_ref_url = _upload_to_temp_hosting(style_reference)
-                if style_ref_url and debug:
-                    print(f"Style ref uploaded: {style_ref_url}")
-            else:
+                    print(f"Style ref loaded: {len(ref_data) // 1024}KB")
+            except Exception as e:
                 if debug:
-                    print(f"Style reference not found: {style_reference}")
+                    print(f"Failed to load style ref: {e}")
+        else:
+            if debug:
+                print(f"Style reference not found: {style_reference}")
 
     headers = {
         "Authorization": f"Bearer {key}",

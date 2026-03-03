@@ -31,6 +31,36 @@ except ImportError:
     sys.exit(1)
 
 
+def validate_image(path: str) -> Tuple[bool, Optional[str]]:
+    """
+    Проверить, что файл является валидным изображением.
+
+    Returns:
+        (True, None) если валидно, (False, error_message) если нет
+    """
+    file_path = Path(path)
+
+    # Проверка существования
+    if not file_path.exists():
+        return False, f"Файл не существует: {path}"
+
+    # Проверка минимального размера (PNG header минимум 67 байт)
+    file_size = file_path.stat().st_size
+    if file_size < 50:
+        return False, f"Файл слишком мал ({file_size} байт), вероятно битый: {path}"
+
+    # Попытка открыть и проверить
+    try:
+        with Image.open(path) as img:
+            img.verify()  # Проверка целостности
+        # Открываем заново после verify (он закрывает файл)
+        with Image.open(path) as img:
+            _ = img.size  # Проверка что размер читается
+        return True, None
+    except Exception as e:
+        return False, f"Не удалось открыть изображение: {e}"
+
+
 # ============================================================================
 # ПАЛИТРА LOOP HERO / DECEIVER
 # Извлечена из скриншотов игры
@@ -98,15 +128,84 @@ BAYER_4X4 = np.array([
 @dataclass
 class StyleConfig:
     """Настройки стилизации."""
-    palette_size: int = 32          # Количество цветов в палитре
-    saturation: float = 0.55        # Множитель насыщенности (0-1)
+    palette_size: int = 20          # Количество цветов в палитре
+    saturation: float = 0.50        # Множитель насыщенности (0-1)
     brightness: float = 0.85        # Множитель яркости
-    contrast: float = 1.15          # Множитель контраста
-    hue_shift: float = 15           # Сдвиг hue в сторону коричневого (градусы)
+    contrast: float = 1.20          # Множитель контраста
+    hue_shift: float = 18           # Сдвиг hue в сторону коричневого (градусы)
     dithering: bool = True          # Применять dithering
-    dither_strength: float = 0.5    # Сила dithering (0-1)
+    dither_strength: float = 0.75   # Сила dithering (0-1)
     use_deceiver_palette: bool = True  # Использовать палитру Deceiver
-    downscale: float = 1.0          # Коэффициент уменьшения для пиксельности
+    downscale: float = 0.4          # Коэффициент уменьшения для пиксельности (0.25-0.5 для Loop Hero стиля)
+
+
+# ============================================================================
+# ГОТОВЫЕ ПРЕСЕТЫ
+# ============================================================================
+
+STYLE_PRESETS = {
+    # Максимально близко к Loop Hero - крупные пиксели, минимум цветов
+    "loop_hero": StyleConfig(
+        palette_size=16,
+        saturation=0.45,
+        brightness=0.80,
+        contrast=1.25,
+        hue_shift=20,
+        dither_strength=0.85,
+        downscale=0.25
+    ),
+    # Сбалансированный - хороший компромисс между деталями и пиксель-артом
+    "balanced": StyleConfig(
+        palette_size=20,
+        saturation=0.50,
+        brightness=0.85,
+        contrast=1.20,
+        hue_shift=18,
+        dither_strength=0.75,
+        downscale=0.4
+    ),
+    # Мягкий - больше деталей, текст читается
+    "soft": StyleConfig(
+        palette_size=24,
+        saturation=0.50,
+        brightness=0.85,
+        contrast=1.18,
+        hue_shift=15,
+        dither_strength=0.65,
+        downscale=0.5
+    ),
+    # Без пикселизации - только цветокоррекция и dithering
+    "color_only": StyleConfig(
+        palette_size=32,
+        saturation=0.55,
+        brightness=0.85,
+        contrast=1.15,
+        hue_shift=15,
+        dither_strength=0.5,
+        downscale=1.0
+    ),
+    # Для игровых UI скриншотов - сохраняет читаемость, лёгкий dithering
+    "game_ui": StyleConfig(
+        palette_size=16,
+        saturation=0.48,
+        brightness=0.82,
+        contrast=1.18,
+        hue_shift=15,
+        dither_strength=0.35,
+        downscale=0.55
+    ),
+    # Чистый пиксель-арт без dithering - для результатов AI стилизации
+    "clean": StyleConfig(
+        palette_size=16,
+        saturation=0.50,
+        brightness=0.88,
+        contrast=1.15,
+        hue_shift=12,
+        dithering=False,
+        dither_strength=0.0,
+        downscale=0.6
+    ),
+}
 
 
 def rgb_to_hsv(r: int, g: int, b: int) -> Tuple[float, float, float]:
@@ -298,9 +397,25 @@ def deceiver_stylize(
     if config is None:
         config = StyleConfig()
 
+    # Валидация входного файла
+    is_valid, error = validate_image(input_path)
+    if not is_valid:
+        return {
+            "success": False,
+            "input": input_path,
+            "error": error
+        }
+
     # Загрузка
-    image = Image.open(input_path)
-    original_size = image.size
+    try:
+        image = Image.open(input_path)
+        original_size = image.size
+    except Exception as e:
+        return {
+            "success": False,
+            "input": input_path,
+            "error": f"Ошибка загрузки изображения: {e}"
+        }
 
     if image.mode != 'RGB':
         image = image.convert('RGB')
@@ -380,13 +495,27 @@ def batch_stylize(
 
     for img_file in input_path.iterdir():
         if img_file.suffix.lower() in image_exts:
+            # Предварительная проверка файла
+            is_valid, error = validate_image(str(img_file))
+            if not is_valid:
+                print(f"[SKIP] {img_file.name}: {error}")
+                results.append({
+                    "success": False,
+                    "input": str(img_file),
+                    "error": error
+                })
+                continue
+
             out_file = output_path / f"{img_file.stem}_deceiver.png"
             print(f"Processing: {img_file.name}")
 
             try:
                 result = deceiver_stylize(str(img_file), str(out_file), config)
                 results.append(result)
+                if not result.get("success"):
+                    print(f"  [FAIL] {result.get('error', 'Unknown error')}")
             except Exception as e:
+                print(f"  [ERROR] {e}")
                 results.append({
                     "success": False,
                     "input": str(img_file),
@@ -404,27 +533,35 @@ def main():
         description="Стилизация изображений в стиле Deceiver / Loop Hero",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Пресеты:
+  loop_hero  - максимально близко к Loop Hero (крупные пиксели, 16 цветов)
+  balanced   - сбалансированный (хороший компромисс, 20 цветов)
+  soft       - мягкий (больше деталей, текст читается, 24 цвета)
+  color_only - только цветокоррекция без пикселизации
+
 Примеры:
-  %(prog)s input.png output.png
-  %(prog)s input.png output.png --palette 16 --dither
-  %(prog)s input.png output.png --no-dither --saturation 0.4
-  %(prog)s --batch input_dir/ output_dir/
+  %(prog)s input.png output.png --preset loop_hero
+  %(prog)s input.png output.png --preset balanced
+  %(prog)s input.png output.png --palette 16 --downscale 0.25
+  %(prog)s --batch input_dir/ output_dir/ --preset soft
         """
     )
 
     parser.add_argument("input", nargs='?', help="Входное изображение")
     parser.add_argument("output", nargs='?', help="Выходное изображение")
 
+    parser.add_argument("--preset", "-p", choices=list(STYLE_PRESETS.keys()),
+                        help="Готовый пресет стиля (переопределяет остальные параметры)")
     parser.add_argument("--batch", action="store_true", help="Пакетная обработка папки")
-    parser.add_argument("--palette", type=int, default=32, help="Размер палитры (default: 32)")
-    parser.add_argument("--saturation", type=float, default=0.55, help="Насыщенность 0-1 (default: 0.55)")
-    parser.add_argument("--brightness", type=float, default=0.85, help="Яркость (default: 0.85)")
-    parser.add_argument("--contrast", type=float, default=1.15, help="Контраст (default: 1.15)")
-    parser.add_argument("--hue-shift", type=float, default=15, help="Сдвиг оттенка (default: 15)")
-    parser.add_argument("--dither", dest='dither', action="store_true", default=True, help="Включить dithering")
+    parser.add_argument("--palette", type=int, help="Размер палитры")
+    parser.add_argument("--saturation", type=float, help="Насыщенность 0-1")
+    parser.add_argument("--brightness", type=float, help="Яркость")
+    parser.add_argument("--contrast", type=float, help="Контраст")
+    parser.add_argument("--hue-shift", type=float, help="Сдвиг оттенка")
+    parser.add_argument("--dither", dest='dither', action="store_true", default=None, help="Включить dithering")
     parser.add_argument("--no-dither", dest='dither', action="store_false", help="Отключить dithering")
-    parser.add_argument("--dither-strength", type=float, default=0.5, help="Сила dithering 0-1 (default: 0.5)")
-    parser.add_argument("--downscale", type=float, default=1.0, help="Коэффициент уменьшения для пиксельности")
+    parser.add_argument("--dither-strength", type=float, help="Сила dithering 0-1")
+    parser.add_argument("--downscale", type=float, help="Коэффициент уменьшения (0.25=крупные пиксели, 0.5=средние)")
     parser.add_argument("--extract-palette", action="store_true", help="Извлечь палитру вместо использования Deceiver")
     parser.add_argument("--json", action="store_true", help="JSON вывод")
 
@@ -434,17 +571,41 @@ def main():
         parser.print_help()
         return 1
 
-    config = StyleConfig(
-        palette_size=args.palette,
-        saturation=args.saturation,
-        brightness=args.brightness,
-        contrast=args.contrast,
-        hue_shift=args.hue_shift,
-        dithering=args.dither,
-        dither_strength=args.dither_strength,
-        use_deceiver_palette=not args.extract_palette,
-        downscale=args.downscale
-    )
+    # Используем пресет или значения по умолчанию
+    if args.preset:
+        config = STYLE_PRESETS[args.preset]
+        # Переопределяем параметры из командной строки если указаны
+        if args.palette is not None:
+            config.palette_size = args.palette
+        if args.saturation is not None:
+            config.saturation = args.saturation
+        if args.brightness is not None:
+            config.brightness = args.brightness
+        if args.contrast is not None:
+            config.contrast = args.contrast
+        if args.hue_shift is not None:
+            config.hue_shift = args.hue_shift
+        if args.dither is not None:
+            config.dithering = args.dither
+        if args.dither_strength is not None:
+            config.dither_strength = args.dither_strength
+        if args.downscale is not None:
+            config.downscale = args.downscale
+        if args.extract_palette:
+            config.use_deceiver_palette = False
+    else:
+        # Создаём конфиг с дефолтами (balanced пресет по сути)
+        config = StyleConfig(
+            palette_size=args.palette if args.palette else 20,
+            saturation=args.saturation if args.saturation else 0.50,
+            brightness=args.brightness if args.brightness else 0.85,
+            contrast=args.contrast if args.contrast else 1.20,
+            hue_shift=args.hue_shift if args.hue_shift else 18,
+            dithering=args.dither if args.dither is not None else True,
+            dither_strength=args.dither_strength if args.dither_strength else 0.75,
+            use_deceiver_palette=not args.extract_palette,
+            downscale=args.downscale if args.downscale else 0.4
+        )
 
     if args.batch:
         results = batch_stylize(args.input, args.output, config)
