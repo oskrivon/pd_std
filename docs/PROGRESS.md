@@ -2,6 +2,170 @@
 
 ## Лог
 
+### 2026-03-04 — Clean Pixel Art Pipeline + Model Comparison
+
+- **Эксперимент: сравнение AI моделей для img2img стилизации**
+
+  | Модель | Сохраняет размер | Качество | Скорость | Рекомендация |
+  |--------|------------------|----------|----------|--------------|
+  | **Qwen-edit** | ✅ 100% (1376×768→1376×768) | Хорошо | 26s | **Для UI, точный размер** |
+  | **Reve-remix** | ~95% (1376×768→1248×832) | Хорошо | 42s | Альтернатива |
+  | **Flux-edit** | Пропорции (1376×768→1024×768) | Хорошо | 69s | Если размер не критичен |
+  | Gemini-flash | ❌ Квадрат 1024² | Отлично | Timeout | Нестабилен |
+  | Gemini-pro | ❌ Квадрат 1024² | Отлично | 33s | Концепты |
+  | GPT-Image-1 | ❌ Генерирует новое | — | — | Только text2img |
+
+- **Clean Pixel Art Pipeline (с сохранением размера)**:
+
+  ```
+  Оригинал (любой размер)
+        ↓
+  ЭТАП 1: Qwen-edit
+    Промпт: "clean pixel art, black outlines, flat colors,
+             simplified shapes, keep composition"
+    Strength: 0.6
+        ↓
+  ЭТАП 2: Selective Edge Detection
+    - Edge detection на результате AI
+    - UI маска (исключить текст/панели)
+    - Threshold: 30-40
+        ↓
+  ЭТАП 3: Quantization + Overlay
+    - Квантизация 64 цвета
+    - Overlay чёрных контуров только на game area
+        ↓
+  Результат (оригинальный размер сохранён!)
+  ```
+
+- **Ключевые выводы**:
+  - **Qwen-edit** — единственная модель, сохраняющая 100% оригинальный размер
+  - **Gemini** квадратит всё до 1024×1024 (padding workaround возможен, но теряет качество)
+  - **Чистые чёрные контуры** требуют AI для упрощения форм + алгоритм для edge detection
+  - **UI маскирование** критично — edge detection портит текст
+
+- **Оптимальный pipeline для чистого пиксельарта**:
+
+  ```
+  Оригинал
+      ↓
+  ЭТАП 1: Алгоритмическая квантизация
+    - Scale 0.7 → NEAREST upscale
+    - Quantize 48 цветов
+      ↓
+  ЭТАП 2: Qwen-edit с детальным промптом
+    Промпт: "Every shape must be ONE SOLID FLAT COLOR:
+            triangles, squares, diamonds/rhombuses,
+            hexagons, rectangles, all floor tiles.
+            Add black 1-pixel outlines.
+            NO gradients, NO textures."
+    Strength: 0.65
+      ↓
+  Результат (размер сохранён!)
+  ```
+
+- **Важно: Qwen реагирует на конкретные названия форм!**
+  - Если не указать "diamonds/rhombuses" — ромбы пола не станут flat
+  - Нужно перечислять все типы форм в промпте
+
+- **Сравнение порядка операций**:
+
+  | Pipeline | Flat colors | Контуры | Рекомендация |
+  |----------|-------------|---------|--------------|
+  | Qwen → Edge detect | ✅ | ✅ Алгоритм | Контроль над контурами |
+  | Quantize → Qwen (keep) | ❌ | ⚠️ AI меняет | Не рекомендуется |
+  | **Quantize → Qwen (flat)** | ✅ | ✅ AI | **Лучший для flat** |
+
+- **Созданные файлы**:
+  - `test_refs/hybrid_step1_qwen.png` — результат Qwen-edit
+  - `test_refs/hybrid_selective.png` — финальный результат с контурами
+  - `test_refs/quantized_allshapes_qwen.png` — лучший flat результат
+  - `test_refs/experiment_*.png` — результаты эксперимента по моделям
+
+### 2026-03-03 (ночь) — Graphics Tool + PixelLab + LoRA Research
+
+- **LoRA Training — облачные варианты** (локальный GPU GTX 1050 Ti 4GB недостаточен):
+
+  | Сервис | Стоимость | Особенности |
+  |--------|-----------|-------------|
+  | **Civitai Trainer** | 500-2000 Buzz (~$5-20) | Простой UI, интеграция с хабом моделей |
+  | **Replicate** | ~$0.50-2/час GPU | API для автоматизации, SDXL LoRA |
+  | **TensorArt** | Бесплатно (лимит) | Веб-интерфейс, быстрый старт |
+  | **RunPod** | ~$0.40/час A4000 | Полный контроль, Jupyter |
+  | **Hugging Face Spaces** | $0.60/час A10G | AutoTrain, интеграция с HF |
+
+  - **AIML API НЕ поддерживает training** — только inference
+  - **Рекомендация**: Civitai для старта (10-20 изображений → .safetensors)
+  - **Workflow**: Civitai train → Replicate API deploy или локально (если GPU 8GB+)
+
+- **AAA практики в AI графике**:
+  - Custom LoRA модели для консистентности стиля
+  - ComfyUI + ControlNet pipelines
+  - UI валидация: Applitools + Figma
+
+- **Новый инструмент `tools/graphics/`**:
+  - Модульная архитектура: generators, transforms, validators, utils
+  - `pixellab.py` — полный wrapper для PixelLab API
+  - `stylize.py` — стилизация (Deceiver, Loop Hero, clean, retro, game_ui)
+  - Документация: `tools/graphics/CLAUDE.md`
+
+- **Протестированные возможности**:
+  - Генерация спрайтов с референсом (init_image + strength)
+  - Ротации (8 направлений) — AI перерисовывает с правильной перспективой
+  - Пикселизация UI с сохранением цветов
+  - Стилизация в разных пресетах
+  - **Спрайтовые анимации** — 10 пресетов (idle, walk, run, attack, hurt, death...)
+
+- **Модуль `sprite_animation.py`**:
+  - `animate_sprite_preset()` — генерация по пресету
+  - `generate_character_animations()` — batch генерация набора
+  - `create_sprite_gif()` — сборка GIF с масштабированием
+  - `create_sprite_sheet()` — сборка sprite sheet
+  - Поддержка направлений: north, east, south, west и диагонали
+  - Виды камеры: side, low top-down, high top-down
+
+- **PixelLab API интеграция**:
+  - API ключ работает с подпиской (баланс $0.00, но генерация бесплатна)
+  - Endpoints: `generate-image-pixflux`, `generate-image-bitforge`, `rotate`, `animate-*`, `inpaint`
+  - **Лимиты**: pixflux до 400x400, bitforge до 200x200
+
+- **Работа с референсами**:
+  - `init_image` + `init_image_strength` (0-100) — img2img подход
+  - `style_image` в bitforge — НЕ работает как style transfer (даёт шум)
+  - Для копирования стиля: использовать оригинал как `init_image` с strength 60-70%
+
+- **Проблема**: PixelLab генерирует слишком "чистый" пиксель-арт
+  - Deceiver/Loop Hero стиль более "грязный" с dithering и текстурой
+
+- **Решение — пайплайн постобработки**:
+  ```
+  PixelLab (init_image 60-70%)
+      ↓
+  Пикселизация (resize 50%)
+      ↓
+  Квантизация (24-32 цвета)
+      ↓
+  Ordered Dithering (Bayer 4x4)
+      ↓
+  Десатурация (75-80%)
+  ```
+
+- **Создание персонажей в стиле Deceiver**:
+  1. Взять существующую картинку Deceiver как `init_image`
+  2. `init_image_strength`: 60-70%
+  3. Описать НОВОГО персонажа в промпте
+  4. Применить постобработку для "грязного" вида
+
+- **UI элементы**:
+  - Иконки: 32x32, 64x64 — генерируются отлично
+  - Кнопки: 128x48 — работает
+  - Панели: 200x200 — идеально для 9-slice
+  - Для больших UI — модульный подход (собирать из частей)
+
+- **Файлы эксперимента**: `studio/test_refs/`
+  - `wizard_variation.png` — PixelLab генерация
+  - `wizard_rough.png` — с постобработкой (ближе к Deceiver)
+  - `ui_elements/` — иконки, кнопки, рамки
+
 ### 2026-03-03 (вечер)
 
 - **Улучшение Deceiver стилизации**:
