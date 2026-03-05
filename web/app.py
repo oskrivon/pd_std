@@ -483,6 +483,257 @@ async def test_plan_view(request: Request, project: str):
     return HTMLResponse(html)
 
 
+# ============ Asset Review ============
+
+# Issue labels for the review form
+ISSUE_LABELS = {
+    # Colors
+    "too_dark": "Слишком тёмное",
+    "too_bright": "Слишком яркое",
+    "too_gloomy": "Слишком мрачное",
+    "wrong_palette": "Неправильная палитра",
+    "low_contrast": "Низкий контраст",
+    "colors_dont_match": "Цвета не сочетаются",
+    # Composition
+    "too_empty": "Слишком пусто",
+    "too_cluttered": "Слишком загромождено",
+    "need_more_elements": "Нужно больше элементов",
+    "wrong_focus": "Неправильный фокус",
+    "bad_balance": "Плохой баланс",
+    # Style
+    "not_pixel_art": "Не пиксельарт",
+    "too_detailed": "Слишком детализировано",
+    "not_detailed_enough": "Недостаточно деталей",
+    "wrong_style": "Неподходящий стиль",
+    "inconsistent": "Несогласованный стиль",
+    # Details
+    "add_objects": "Добавить объекты",
+    "remove_objects": "Убрать лишнее",
+    "wrong_proportions": "Неправильные пропорции",
+    "missing_elements": "Отсутствуют элементы",
+}
+
+COLOR_ISSUES = ["too_dark", "too_bright", "too_gloomy", "wrong_palette", "low_contrast"]
+COMPOSITION_ISSUES = ["too_empty", "too_cluttered", "need_more_elements", "wrong_focus"]
+STYLE_ISSUES = ["not_pixel_art", "too_detailed", "not_detailed_enough", "wrong_style"]
+DETAIL_ISSUES = ["add_objects", "remove_objects", "wrong_proportions", "missing_elements"]
+
+
+def get_pending_assets():
+    """Get all assets pending review from all projects."""
+    from core.asset_feedback import AssetHistoryManager
+    from core.asset_scanner import AssetScanner, AssetStatus
+
+    pending = []
+
+    for project_name, project in projects.items():
+        project_path = project.path
+
+        # Check .generations folder for pending_review
+        history_mgr = AssetHistoryManager(project_path)
+        for history in history_mgr.list_pending_review():
+            latest = history.get_latest()
+            pending.append({
+                "asset_id": history.asset_id,
+                "project": project_name,
+                "category": history.spec.get("category", "misc"),
+                "version": history.current_version,
+                "preview_path": latest.result_path if latest else None,
+                "history": history
+            })
+
+        # Also check manifest for pending_review status
+        scanner = AssetScanner(project_path)
+        for asset in scanner.scan_for_review():
+            # Check if not already in list
+            if not any(p["asset_id"] == asset.asset_id for p in pending):
+                pending.append({
+                    "asset_id": asset.asset_id,
+                    "project": project_name,
+                    "category": asset.category,
+                    "version": 1,
+                    "preview_path": asset.path,
+                    "history": None
+                })
+
+    return pending
+
+
+@app.get("/review", response_class=HTMLResponse)
+async def review_page(request: Request):
+    """Asset review page - list all pending."""
+    assets = get_pending_assets()
+
+    return templates.TemplateResponse("review.html", {
+        "request": request,
+        "assets": assets,
+        "current_asset": None,
+        "pending_count": len(assets),
+        "color_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in COLOR_ISSUES],
+        "composition_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in COMPOSITION_ISSUES],
+        "style_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in STYLE_ISSUES],
+        "detail_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in DETAIL_ISSUES],
+    })
+
+
+@app.get("/review/{project}/{category}/{asset_id}", response_class=HTMLResponse)
+async def review_asset(request: Request, project: str, category: str, asset_id: str,
+                       v: Optional[int] = None):
+    """Review specific asset."""
+    from core.asset_feedback import AssetHistoryManager
+
+    if project not in projects:
+        return HTMLResponse(f"Project not found: {project}", status_code=404)
+
+    project_path = projects[project].path
+    history_mgr = AssetHistoryManager(project_path)
+    history = history_mgr.load_history(asset_id)
+
+    assets = get_pending_assets()
+    current_version = v or history.current_version
+
+    # Find current image
+    current_image = None
+    if history.generations:
+        for gen in history.generations:
+            if gen.version == current_version:
+                current_image = f"v{gen.version}/result.png"
+                break
+        if not current_image:
+            current_image = f"v{history.current_version}/result.png"
+
+    current_asset = {
+        "asset_id": asset_id,
+        "project": project,
+        "category": category,
+        "version": current_version
+    }
+
+    return templates.TemplateResponse("review.html", {
+        "request": request,
+        "assets": assets,
+        "current_asset": current_asset,
+        "current_image": current_image,
+        "current_version": current_version,
+        "history": history,
+        "pending_count": len(assets),
+        "color_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in COLOR_ISSUES],
+        "composition_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in COMPOSITION_ISSUES],
+        "style_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in STYLE_ISSUES],
+        "detail_issues": [{"value": v, "label": ISSUE_LABELS[v]} for v in DETAIL_ISSUES],
+    })
+
+
+@app.post("/review/{project}/{category}/{asset_id}/feedback")
+async def submit_feedback(request: Request, project: str, category: str, asset_id: str,
+                          decision: str = Form(...),
+                          issues: List[str] = Form(default=[]),
+                          free_text: str = Form(default=""),
+                          intensity: str = Form(default="moderate")):
+    """Submit feedback for an asset."""
+    from core.asset_feedback import (
+        AssetHistoryManager, AssetFeedback, FeedbackIssue,
+        ChangeIntensity, ReviewDecision
+    )
+    from core.asset_scanner import AssetScanner, AssetStatus
+
+    if project not in projects:
+        return HTMLResponse(f"Project not found: {project}", status_code=404)
+
+    project_path = projects[project].path
+    history_mgr = AssetHistoryManager(project_path)
+    history = history_mgr.load_history(asset_id)
+
+    # Map decision string to enum
+    decision_map = {
+        "approved": ReviewDecision.APPROVED,
+        "rejected": ReviewDecision.REJECTED,
+        "revision_requested": ReviewDecision.REVISION_REQUESTED
+    }
+    decision_enum = decision_map.get(decision, ReviewDecision.REVISION_REQUESTED)
+
+    # Map intensity
+    intensity_map = {
+        "minimal": ChangeIntensity.MINIMAL,
+        "moderate": ChangeIntensity.MODERATE,
+        "major": ChangeIntensity.MAJOR
+    }
+    intensity_enum = intensity_map.get(intensity, ChangeIntensity.MODERATE)
+
+    # Map issues
+    issue_enums = []
+    for issue in issues:
+        try:
+            issue_enums.append(FeedbackIssue(issue))
+        except ValueError:
+            pass
+
+    # Create feedback
+    feedback = AssetFeedback(
+        version=history.current_version,
+        asset_id=asset_id,
+        reviewer="web_user",
+        decision=decision_enum,
+        issues=issue_enums,
+        free_text=free_text,
+        change_intensity=intensity_enum
+    )
+
+    # Submit feedback
+    history_mgr.submit_feedback(asset_id, feedback)
+
+    # Update manifest status
+    scanner = AssetScanner(project_path)
+    if decision_enum == ReviewDecision.APPROVED:
+        # Copy to final location and update manifest
+        target_path = project_path / "assets" / category / f"{asset_id}.png"
+        history_mgr.approve_asset(asset_id, target_path)
+        scanner.update_status(asset_id, category, AssetStatus.READY, path=str(target_path))
+    elif decision_enum == ReviewDecision.REJECTED:
+        scanner.update_status(asset_id, category, AssetStatus.REJECTED, feedback=free_text)
+    else:
+        # Revision requested - status goes back to planned for regeneration
+        scanner.update_status(asset_id, category, AssetStatus.PLANNED, feedback=free_text)
+
+    # Redirect back to review page
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/review", status_code=303)
+
+
+@app.get("/generations/{project}/{asset_id}/{path:path}")
+async def serve_generation(project: str, asset_id: str, path: str):
+    """Serve generated asset images."""
+    from fastapi.responses import FileResponse
+
+    if project not in projects:
+        return HTMLResponse("Not found", status_code=404)
+
+    project_path = projects[project].path
+    file_path = project_path / "assets" / ".generations" / asset_id / path
+
+    if not file_path.exists():
+        return HTMLResponse("Not found", status_code=404)
+
+    return FileResponse(file_path)
+
+
+@app.get("/assets/{project}/{path:path}")
+async def serve_asset(project: str, path: str):
+    """Serve project assets."""
+    from fastapi.responses import FileResponse
+
+    if project not in projects:
+        return HTMLResponse("Not found", status_code=404)
+
+    project_path = projects[project].path
+    file_path = project_path / "assets" / path
+
+    if not file_path.exists():
+        return HTMLResponse("Not found", status_code=404)
+
+    return FileResponse(file_path)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

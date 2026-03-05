@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Review - Ptero Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <style>
+        .checkbox-btn:checked + label {
+            background-color: #7c3aed;
+            border-color: #7c3aed;
+            color: white;
+        }
+        .radio-btn:checked + label {
+            background-color: #7c3aed;
+            border-color: #7c3aed;
+            color: white;
+        }
+        .version-thumb {
+            transition: all 0.2s;
+        }
+        .version-thumb:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+        }
+        .version-thumb.active {
+            ring: 2px solid #7c3aed;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 px-6 py-4">
+        <div class="flex items-center justify-between max-w-7xl mx-auto">
+            <div class="flex items-center gap-4">
+                <a href="/" class="text-purple-400 hover:text-purple-300">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                </a>
+                <h1 class="text-xl font-bold">Asset Review</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-gray-400">{{ pending_count }} pending</span>
+                <a href="/review" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm">
+                    Refresh
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6">
+        {% if not assets %}
+        <!-- Empty state -->
+        <div class="text-center py-20">
+            <div class="text-6xl mb-4">✅</div>
+            <h2 class="text-2xl font-bold text-gray-300 mb-2">Нет ассетов для ревью</h2>
+            <p class="text-gray-500">Все ассеты одобрены или ожидают генерации</p>
+            <a href="/" class="mt-6 inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg">
+                Вернуться на Dashboard
+            </a>
+        </div>
+        {% else %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Asset List (Left) -->
+            <div class="lg:col-span-1 bg-gray-800 rounded-lg p-4">
+                <h2 class="text-lg font-semibold mb-4">Ожидают ревью</h2>
+                <div class="space-y-2" id="asset-list">
+                    {% for asset in assets %}
+                    <a href="/review/{{ asset.project }}/{{ asset.category }}/{{ asset.asset_id }}"
+                       class="block p-3 rounded-lg hover:bg-gray-700 transition-colors
+                              {% if current_asset and current_asset.asset_id == asset.asset_id %}bg-purple-900/50 border border-purple-500{% else %}bg-gray-700/50{% endif %}">
+                        <div class="flex items-center gap-3">
+                            {% if asset.preview_path %}
+                            <img src="/assets/{{ asset.project }}/{{ asset.preview_path }}"
+                                 class="w-12 h-12 object-cover rounded" alt="">
+                            {% else %}
+                            <div class="w-12 h-12 bg-gray-600 rounded flex items-center justify-center">
+                                <span class="text-2xl">🎨</span>
+                            </div>
+                            {% endif %}
+                            <div class="flex-1 min-w-0">
+                                <div class="font-medium truncate">{{ asset.asset_id }}</div>
+                                <div class="text-sm text-gray-400">{{ asset.project }} / {{ asset.category }}</div>
+                            </div>
+                            <div class="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">
+                                v{{ asset.version or 1 }}
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Review Panel (Right) -->
+            {% if current_asset %}
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Asset Preview -->
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold">{{ current_asset.asset_id }}</h2>
+                        <div class="flex items-center gap-2">
+                            <span class="text-gray-400">{{ current_asset.project }}</span>
+                            <span class="text-gray-600">/</span>
+                            <span class="text-gray-400">{{ current_asset.category }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Main Preview -->
+                    <div class="bg-gray-900 rounded-lg p-4 mb-4">
+                        {% if current_image %}
+                        <img src="/generations/{{ current_asset.project }}/{{ current_asset.asset_id }}/{{ current_image }}"
+                             class="max-w-full h-auto mx-auto rounded"
+                             alt="{{ current_asset.asset_id }}"
+                             style="image-rendering: pixelated; max-height: 400px;">
+                        {% else %}
+                        <div class="text-center py-20 text-gray-500">
+                            Изображение не найдено
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Version History -->
+                    {% if history and history.generations|length > 1 %}
+                    <div class="mb-4">
+                        <h3 class="text-sm font-medium text-gray-400 mb-2">История версий</h3>
+                        <div class="flex gap-2 overflow-x-auto pb-2">
+                            {% for gen in history.generations %}
+                            <a href="/review/{{ current_asset.project }}/{{ current_asset.category }}/{{ current_asset.asset_id }}?v={{ gen.version }}"
+                               class="version-thumb flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden
+                                      {% if gen.version == current_version %}border-purple-500{% else %}border-gray-600 hover:border-gray-500{% endif %}">
+                                <img src="/generations/{{ current_asset.project }}/{{ current_asset.asset_id }}/v{{ gen.version }}/result.png"
+                                     class="w-full h-full object-cover" style="image-rendering: pixelated;">
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Previous Feedback -->
+                    {% if history and history.generations[-1].feedback %}
+                    <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 mb-4">
+                        <h3 class="text-sm font-medium text-yellow-400 mb-2">Предыдущий фидбэк</h3>
+                        <p class="text-gray-300">{{ history.generations[-1].feedback.free_text }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Feedback Form -->
+                <form action="/review/{{ current_asset.project }}/{{ current_asset.category }}/{{ current_asset.asset_id }}/feedback"
+                      method="POST"
+                      class="bg-gray-800 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold mb-4">Оставить фидбэк</h3>
+
+                    <!-- Quick Actions -->
+                    <div class="flex gap-3 mb-6">
+                        <button type="submit" name="decision" value="approved"
+                                class="flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                            ✓ Approve
+                        </button>
+                        <button type="submit" name="decision" value="rejected"
+                                class="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors">
+                            ✗ Reject
+                        </button>
+                    </div>
+
+                    <div class="border-t border-gray-700 pt-6">
+                        <h4 class="text-sm font-medium text-gray-400 mb-3">Или запросить изменения:</h4>
+
+                        <!-- Issue Categories -->
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <!-- Colors -->
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-300 mb-2">Цвета</h5>
+                                <div class="space-y-1">
+                                    {% for issue in color_issues %}
+                                    <div>
+                                        <input type="checkbox" name="issues" value="{{ issue.value }}"
+                                               id="issue-{{ issue.value }}" class="checkbox-btn hidden">
+                                        <label for="issue-{{ issue.value }}"
+                                               class="block px-3 py-1.5 text-sm rounded border border-gray-600
+                                                      hover:border-gray-500 cursor-pointer transition-colors">
+                                            {{ issue.label }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Composition -->
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-300 mb-2">Композиция</h5>
+                                <div class="space-y-1">
+                                    {% for issue in composition_issues %}
+                                    <div>
+                                        <input type="checkbox" name="issues" value="{{ issue.value }}"
+                                               id="issue-{{ issue.value }}" class="checkbox-btn hidden">
+                                        <label for="issue-{{ issue.value }}"
+                                               class="block px-3 py-1.5 text-sm rounded border border-gray-600
+                                                      hover:border-gray-500 cursor-pointer transition-colors">
+                                            {{ issue.label }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Style -->
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-300 mb-2">Стиль</h5>
+                                <div class="space-y-1">
+                                    {% for issue in style_issues %}
+                                    <div>
+                                        <input type="checkbox" name="issues" value="{{ issue.value }}"
+                                               id="issue-{{ issue.value }}" class="checkbox-btn hidden">
+                                        <label for="issue-{{ issue.value }}"
+                                               class="block px-3 py-1.5 text-sm rounded border border-gray-600
+                                                      hover:border-gray-500 cursor-pointer transition-colors">
+                                            {{ issue.label }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- Details -->
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-300 mb-2">Детали</h5>
+                                <div class="space-y-1">
+                                    {% for issue in detail_issues %}
+                                    <div>
+                                        <input type="checkbox" name="issues" value="{{ issue.value }}"
+                                               id="issue-{{ issue.value }}" class="checkbox-btn hidden">
+                                        <label for="issue-{{ issue.value }}"
+                                               class="block px-3 py-1.5 text-sm rounded border border-gray-600
+                                                      hover:border-gray-500 cursor-pointer transition-colors">
+                                            {{ issue.label }}
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Free Text -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Комментарий (опишите что изменить)
+                            </label>
+                            <textarea name="free_text" rows="3"
+                                      class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg
+                                             focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none
+                                             text-gray-100 placeholder-gray-400"
+                                      placeholder="Например: Добавить больше кристаллов на стенах, сделать лаву ярче..."></textarea>
+                        </div>
+
+                        <!-- Change Intensity -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Масштаб изменений
+                            </label>
+                            <div class="flex gap-2">
+                                <input type="radio" name="intensity" value="minimal" id="int-min" class="radio-btn hidden">
+                                <label for="int-min"
+                                       class="flex-1 py-2 px-4 text-center text-sm rounded border border-gray-600
+                                              hover:border-gray-500 cursor-pointer transition-colors">
+                                    Минимальные
+                                </label>
+
+                                <input type="radio" name="intensity" value="moderate" id="int-mod" class="radio-btn hidden" checked>
+                                <label for="int-mod"
+                                       class="flex-1 py-2 px-4 text-center text-sm rounded border border-gray-600
+                                              hover:border-gray-500 cursor-pointer transition-colors">
+                                    Умеренные
+                                </label>
+
+                                <input type="radio" name="intensity" value="major" id="int-maj" class="radio-btn hidden">
+                                <label for="int-maj"
+                                       class="flex-1 py-2 px-4 text-center text-sm rounded border border-gray-600
+                                              hover:border-gray-500 cursor-pointer transition-colors">
+                                    Существенные
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Submit Revision -->
+                        <button type="submit" name="decision" value="revision_requested"
+                                class="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors">
+                            Запросить изменения
+                        </button>
+                    </div>
+                </form>
+            </div>
+            {% else %}
+            <!-- No asset selected -->
+            <div class="lg:col-span-2 bg-gray-800 rounded-lg p-6 text-center">
+                <div class="py-20">
+                    <div class="text-4xl mb-4">👈</div>
+                    <p class="text-gray-400">Выберите ассет для ревью из списка слева</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </main>
+</body>
+</html>
