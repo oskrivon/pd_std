@@ -23,6 +23,22 @@
   - [ ] `ptero-studio telegram watch` — режим наблюдения за группой
   - [ ] `ptero-studio telegram status` — статус подключения
 
+### Asset Review System
+
+- [ ] **Auto-regeneration daemon** (`core/asset_regenerator.py`):
+  - [ ] Мониторинг assets с status="pending" (после feedback)
+  - [ ] Автоматическая перегенерация с учетом feedback
+  - [ ] Интеграция с FeedbackProcessor для построения промптов
+  - [ ] Настройка: max_retries, cooldown между генерациями
+  - [ ] CLI: `ptero-studio assets watch` — режим наблюдения
+  - [ ] CLI: `ptero-studio assets regenerate <asset_id>` — ручной запуск
+
+- [ ] **Partial UI deploy** (remote access without local API):
+  - [ ] Разделение web UI и генерации (UI → remote, generation → local)
+  - [ ] WebSocket bridge для команд UI → local worker
+  - [ ] Tunnel (ngrok/cloudflared) для доступа к локальному серверу
+  - [ ] Альтернатива: статический UI + polling к local API через tunnel
+
 ### Следующие улучшения
 
 - [ ] **Prompt caching** — оптимизация токенов через кэширование
