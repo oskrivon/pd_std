@@ -2,6 +2,31 @@
 
 ## Лог
 
+### 2026-03-05 — Remote UI Architecture (Split Mode)
+
+- **Split architecture для удалённого доступа к Asset Review**:
+
+  ```
+  [Browser] <--WebSocket--> [Remote Server (VPS)] <--WebSocket--> [Local Worker]
+                                    |
+                              [Static UI]
+  ```
+
+- **Компоненты**:
+  - `core/ws_protocol.py` — протокол сообщений (команды, ответы, статусы)
+  - `core/local_worker.py` — локальный воркер, исполняет команды
+  - `web/remote_server.py` — сервер для деплоя, роутит сообщения
+  - `web/templates/remote_*.html` — UI для remote режима
+
+- **CLI команды**:
+  - `ptero-studio remote-server --port 8081` — запуск на VPS
+  - `ptero-studio worker --url ws://vps:8081/ws/worker` — подключение локально
+
+- **Преимущества**:
+  - UI доступен из любой точки (хостится на VPS)
+  - Генерация остаётся локальной (API ключи не покидают машину)
+  - Дизайнер может ревьюить без доступа к коду
+
 ### 2026-03-05 — Asset Review System
 
 - **Новая система ревью ассетов** с итеративным фидбэком:
