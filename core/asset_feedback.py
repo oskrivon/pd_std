@@ -231,9 +231,17 @@ class AssetHistory:
 class AssetHistoryManager:
     """Менеджер истории генераций."""
 
-    def __init__(self, project_path: Path):
+    def __init__(self, project_path: Path, studio_path: Path = None):
         self.project_path = Path(project_path)
-        self.generations_dir = self.project_path / "assets" / ".generations"
+        self.project_name = self.project_path.name
+
+        # История хранится в studio/generations/{project}/, не в проекте
+        if studio_path is None:
+            # Предполагаем стандартную структуру workspace
+            studio_path = self.project_path.parent / "studio"
+
+        self.studio_path = Path(studio_path)
+        self.generations_dir = self.studio_path / "generations" / self.project_name
         self.generations_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_asset_dir(self, asset_id: str) -> Path:

@@ -51,6 +51,9 @@ screenshots/
 captures/
 validation/
 
+# Asset generations (cached, can be regenerated)
+generations/
+
 # Temp
 tmp/
 temp/

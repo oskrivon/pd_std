@@ -525,12 +525,13 @@ def get_pending_assets():
     from core.asset_scanner import AssetScanner, AssetStatus
 
     pending = []
+    studio_path = WORKSPACE / "studio"
 
     for project_name, project in projects.items():
         project_path = project.path
 
-        # Check .generations folder for pending_review
-        history_mgr = AssetHistoryManager(project_path)
+        # Check generations folder in studio for pending_review
+        history_mgr = AssetHistoryManager(project_path, studio_path)
         for history in history_mgr.list_pending_review():
             latest = history.get_latest()
             pending.append({
@@ -586,7 +587,8 @@ async def review_asset(request: Request, project: str, category: str, asset_id: 
         return HTMLResponse(f"Project not found: {project}", status_code=404)
 
     project_path = projects[project].path
-    history_mgr = AssetHistoryManager(project_path)
+    studio_path = WORKSPACE / "studio"
+    history_mgr = AssetHistoryManager(project_path, studio_path)
     history = history_mgr.load_history(asset_id)
 
     assets = get_pending_assets()
@@ -641,7 +643,8 @@ async def submit_feedback(request: Request, project: str, category: str, asset_i
         return HTMLResponse(f"Project not found: {project}", status_code=404)
 
     project_path = projects[project].path
-    history_mgr = AssetHistoryManager(project_path)
+    studio_path = WORKSPACE / "studio"
+    history_mgr = AssetHistoryManager(project_path, studio_path)
     history = history_mgr.load_history(asset_id)
 
     # Map decision string to enum
@@ -702,14 +705,14 @@ async def submit_feedback(request: Request, project: str, category: str, asset_i
 
 @app.get("/generations/{project}/{asset_id}/{path:path}")
 async def serve_generation(project: str, asset_id: str, path: str):
-    """Serve generated asset images."""
+    """Serve generated asset images from studio/generations/."""
     from fastapi.responses import FileResponse
 
     if project not in projects:
         return HTMLResponse("Not found", status_code=404)
 
-    project_path = projects[project].path
-    file_path = project_path / "assets" / ".generations" / asset_id / path
+    # Generations stored in studio/generations/{project}/{asset_id}/
+    file_path = WORKSPACE / "studio" / "generations" / project / asset_id / path
 
     if not file_path.exists():
         return HTMLResponse("Not found", status_code=404)
