@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Review - Ptero Studio Remote</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <a href="/" class="text-gray-400 hover:text-white">&larr; Back</a>
+                <h1 class="text-xl font-bold">Asset Review</h1>
+            </div>
+            <div id="connection-status" class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-yellow-500" id="status-dot"></span>
+                <span id="status-text">Connecting...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-6">
+        <!-- Worker offline warning -->
+        <div id="worker-offline" class="hidden bg-red-900/50 border border-red-700 rounded-lg p-4 mb-6">
+            <p class="font-semibold">No worker connected</p>
+            <p class="text-sm text-gray-300">Start a local worker to enable asset operations.</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-6">
+            <!-- Asset List -->
+            <div class="col-span-1 bg-gray-800 rounded-lg p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">Assets</h2>
+                    <button id="btn-scan" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+                        Scan
+                    </button>
+                </div>
+                <div id="asset-list" class="space-y-2 max-h-[70vh] overflow-y-auto">
+                    <p class="text-gray-500 text-center py-8">Click "Scan" to load assets</p>
+                </div>
+            </div>
+
+            <!-- Asset Detail -->
+            <div class="col-span-2 bg-gray-800 rounded-lg p-4">
+                <div id="asset-detail">
+                    <p class="text-gray-500 text-center py-16">Select an asset to view details</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Modal -->
+    <div id="feedback-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-xl font-bold mb-4">Submit Feedback</h3>
+
+            <form id="feedback-form" class="space-y-4">
+                <input type="hidden" id="fb-project">
+                <input type="hidden" id="fb-category">
+                <input type="hidden" id="fb-asset-id">
+
+                <!-- Issues checkboxes -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Issues (select all that apply)</label>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="too_dark" class="rounded">
+                            <span>Too dark</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="too_bright" class="rounded">
+                            <span>Too bright</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="too_gloomy" class="rounded">
+                            <span>Too gloomy</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="wrong_palette" class="rounded">
+                            <span>Wrong palette</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="too_empty" class="rounded">
+                            <span>Too empty</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="too_cluttered" class="rounded">
+                            <span>Too cluttered</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="not_pixel_art" class="rounded">
+                            <span>Not pixel art</span>
+                        </label>
+                        <label class="flex items-center space-x-2">
+                            <input type="checkbox" name="issues" value="wrong_style" class="rounded">
+                            <span>Wrong style</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Free text -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Additional notes</label>
+                    <textarea id="fb-free-text" rows="3" class="w-full bg-gray-700 rounded px-3 py-2 text-white" placeholder="Describe what needs to change..."></textarea>
+                </div>
+
+                <!-- Intensity -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Change intensity</label>
+                    <select id="fb-intensity" class="w-full bg-gray-700 rounded px-3 py-2 text-white">
+                        <option value="minimal">Minimal - small tweaks</option>
+                        <option value="moderate" selected>Moderate - rework parts</option>
+                        <option value="major">Major - regenerate from scratch</option>
+                    </select>
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" id="btn-cancel-feedback" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded">
+                        Submit & Regenerate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let currentAsset = null;
+        let pendingCallbacks = {};
+
+        function connect() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws/ui`);
+
+            ws.onopen = () => {
+                updateStatus('connected', 'Connected');
+            };
+
+            ws.onclose = () => {
+                updateStatus('disconnected', 'Disconnected');
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = () => {
+                updateStatus('error', 'Error');
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                handleMessage(msg);
+            };
+        }
+
+        function updateStatus(state, text) {
+            const dot = document.getElementById('status-dot');
+            const txt = document.getElementById('status-text');
+            txt.textContent = text;
+
+            dot.className = 'w-3 h-3 rounded-full ';
+            if (state === 'connected') dot.className += 'bg-green-500';
+            else if (state === 'disconnected') dot.className += 'bg-red-500';
+            else dot.className += 'bg-yellow-500';
+        }
+
+        function send(type, payload, callback) {
+            const requestId = Math.random().toString(36).substring(7);
+            if (callback) {
+                pendingCallbacks[requestId] = callback;
+            }
+            ws.send(JSON.stringify({ type, request_id: requestId, payload }));
+        }
+
+        function handleMessage(msg) {
+            // Check for pending callback
+            if (msg.request_id && pendingCallbacks[msg.request_id]) {
+                pendingCallbacks[msg.request_id](msg);
+                delete pendingCallbacks[msg.request_id];
+                return;
+            }
+
+            // Handle status updates
+            if (msg.type === 'status_worker_online') {
+                document.getElementById('worker-offline').classList.add('hidden');
+            } else if (msg.type === 'status_worker_offline') {
+                document.getElementById('worker-offline').classList.remove('hidden');
+            } else if (msg.type === 'resp_error') {
+                alert('Error: ' + msg.payload.error);
+            }
+        }
+
+        // Scan assets
+        document.getElementById('btn-scan').addEventListener('click', () => {
+            send('cmd_scan_assets', {}, (msg) => {
+                if (msg.type === 'resp_assets_list') {
+                    renderAssetList(msg.payload.assets);
+                }
+            });
+        });
+
+        function renderAssetList(assets) {
+            const list = document.getElementById('asset-list');
+
+            if (assets.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-center py-8">No assets found</p>';
+                return;
+            }
+
+            // Group by status
+            const pending = assets.filter(a => a.status === 'pending_review' || a.status === 'pending');
+            const approved = assets.filter(a => a.status === 'approved');
+            const other = assets.filter(a => !['pending_review', 'pending', 'approved'].includes(a.status));
+
+            list.innerHTML = '';
+
+            if (pending.length > 0) {
+                list.innerHTML += '<p class="text-sm text-yellow-400 font-semibold mb-2">Pending Review</p>';
+                pending.forEach(a => list.innerHTML += renderAssetItem(a));
+            }
+
+            if (other.length > 0) {
+                list.innerHTML += '<p class="text-sm text-gray-400 font-semibold mb-2 mt-4">In Progress</p>';
+                other.forEach(a => list.innerHTML += renderAssetItem(a));
+            }
+
+            if (approved.length > 0) {
+                list.innerHTML += '<p class="text-sm text-green-400 font-semibold mb-2 mt-4">Approved</p>';
+                approved.forEach(a => list.innerHTML += renderAssetItem(a));
+            }
+
+            // Add click handlers
+            list.querySelectorAll('.asset-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const data = JSON.parse(el.dataset.asset);
+                    loadAssetDetail(data);
+                });
+            });
+        }
+
+        function renderAssetItem(asset) {
+            const statusColors = {
+                'pending_review': 'bg-yellow-600',
+                'pending': 'bg-blue-600',
+                'approved': 'bg-green-600',
+                'rejected': 'bg-red-600'
+            };
+            const statusColor = statusColors[asset.status] || 'bg-gray-600';
+
+            return `
+                <div class="asset-item bg-gray-700 hover:bg-gray-600 rounded p-3 cursor-pointer" data-asset='${JSON.stringify(asset)}'>
+                    <div class="flex items-center space-x-3">
+                        ${asset.latest_image ? `<img src="data:image/png;base64,${asset.latest_image}" class="w-12 h-12 object-cover rounded">` : '<div class="w-12 h-12 bg-gray-600 rounded"></div>'}
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate">${asset.asset_id}</p>
+                            <p class="text-sm text-gray-400">${asset.project} / ${asset.category}</p>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded ${statusColor}">v${asset.current_version}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function loadAssetDetail(asset) {
+            currentAsset = asset;
+
+            send('cmd_get_asset', {
+                project: asset.project,
+                category: asset.category,
+                asset_id: asset.asset_id
+            }, (msg) => {
+                if (msg.type === 'resp_asset_detail') {
+                    renderAssetDetail(msg.payload);
+                }
+            });
+        }
+
+        function renderAssetDetail(detail) {
+            const container = document.getElementById('asset-detail');
+            const latest = detail.generations[detail.generations.length - 1];
+
+            let html = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold">${detail.asset_id}</h2>
+                            <p class="text-gray-400">${detail.project} / ${detail.category}</p>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="btn-approve" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded">
+                                Approve
+                            </button>
+                            <button id="btn-feedback" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded">
+                                Request Changes
+                            </button>
+                            <button id="btn-reject" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded">
+                                Reject
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Current image -->
+                    ${latest && latest.image_data ? `
+                        <div class="bg-gray-700 rounded-lg p-4">
+                            <p class="text-sm text-gray-400 mb-2">Version ${latest.version} - ${new Date(latest.timestamp).toLocaleString()}</p>
+                            <img src="data:image/png;base64,${latest.image_data}" class="max-w-full rounded">
+                        </div>
+                    ` : '<p class="text-gray-500">No image generated yet</p>'}
+
+                    <!-- Spec -->
+                    <div class="bg-gray-700 rounded-lg p-4">
+                        <h3 class="font-semibold mb-2">Specification</h3>
+                        <pre class="text-sm text-gray-300 overflow-x-auto">${JSON.stringify(detail.spec, null, 2)}</pre>
+                    </div>
+
+                    <!-- History -->
+                    ${detail.generations.length > 1 ? `
+                        <div class="bg-gray-700 rounded-lg p-4">
+                            <h3 class="font-semibold mb-2">Version History</h3>
+                            <div class="flex space-x-2 overflow-x-auto pb-2">
+                                ${detail.generations.map(g => `
+                                    <div class="flex-shrink-0">
+                                        ${g.image_data ? `<img src="data:image/png;base64,${g.image_data}" class="w-24 h-24 object-cover rounded">` : '<div class="w-24 h-24 bg-gray-600 rounded"></div>'}
+                                        <p class="text-xs text-center mt-1">v${g.version}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            // Add button handlers
+            document.getElementById('btn-approve').addEventListener('click', () => approveAsset(detail));
+            document.getElementById('btn-feedback').addEventListener('click', () => showFeedbackModal(detail));
+            document.getElementById('btn-reject').addEventListener('click', () => rejectAsset(detail));
+        }
+
+        function approveAsset(detail) {
+            if (!confirm('Approve this asset and copy to project?')) return;
+
+            send('cmd_approve', {
+                project: detail.project,
+                category: detail.category,
+                asset_id: detail.asset_id
+            }, (msg) => {
+                if (msg.type === 'resp_approved' && msg.payload.success) {
+                    alert('Asset approved and copied to: ' + msg.payload.target_path);
+                    document.getElementById('btn-scan').click();
+                }
+            });
+        }
+
+        function rejectAsset(detail) {
+            if (!confirm('Reject this asset?')) return;
+
+            send('cmd_submit_feedback', {
+                project: detail.project,
+                category: detail.category,
+                asset_id: detail.asset_id,
+                decision: 'rejected',
+                issues: [],
+                free_text: 'Rejected by reviewer'
+            }, () => {
+                document.getElementById('btn-scan').click();
+            });
+        }
+
+        function showFeedbackModal(detail) {
+            document.getElementById('fb-project').value = detail.project;
+            document.getElementById('fb-category').value = detail.category;
+            document.getElementById('fb-asset-id').value = detail.asset_id;
+            document.getElementById('feedback-modal').classList.remove('hidden');
+        }
+
+        document.getElementById('btn-cancel-feedback').addEventListener('click', () => {
+            document.getElementById('feedback-modal').classList.add('hidden');
+        });
+
+        document.getElementById('feedback-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            const issues = Array.from(document.querySelectorAll('input[name="issues"]:checked')).map(el => el.value);
+
+            send('cmd_submit_feedback', {
+                project: document.getElementById('fb-project').value,
+                category: document.getElementById('fb-category').value,
+                asset_id: document.getElementById('fb-asset-id').value,
+                decision: 'revision_requested',
+                issues: issues,
+                free_text: document.getElementById('fb-free-text').value,
+                change_intensity: document.getElementById('fb-intensity').value
+            }, () => {
+                // Feedback saved, now regenerate
+                send('cmd_regenerate', {
+                    project: document.getElementById('fb-project').value,
+                    category: document.getElementById('fb-category').value,
+                    asset_id: document.getElementById('fb-asset-id').value
+                }, (msg) => {
+                    document.getElementById('feedback-modal').classList.add('hidden');
+
+                    if (msg.type === 'resp_generation_complete' && msg.payload.success) {
+                        // Reload detail
+                        loadAssetDetail(currentAsset);
+                    }
+
+                    document.getElementById('btn-scan').click();
+                });
+            });
+        });
+
+        // Connect on load
+        connect();
+    </script>
+</body>
+</html>

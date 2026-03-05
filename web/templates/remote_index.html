@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ptero Studio Remote</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8">Ptero Studio Remote</h1>
+
+        <div class="grid grid-cols-2 gap-6 mb-8">
+            <!-- Worker Status -->
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">Workers</h2>
+                <div id="workers-status">
+                    {% if status.workers %}
+                        {% for w in status.workers %}
+                        <div class="flex items-center space-x-3 mb-2">
+                            <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                            <span>{{ w.worker_id }}</span>
+                            <span class="text-sm text-gray-400">Connected</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="flex items-center space-x-3">
+                            <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+                            <span class="text-gray-400">No workers connected</span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Connections -->
+            <div class="bg-gray-800 rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">Connections</h2>
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">UI Clients:</span>
+                        <span>{{ status.ui_clients }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">Pending Requests:</span>
+                        <span>{{ status.pending_requests }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Navigation</h2>
+            <div class="flex space-x-4">
+                <a href="/review" class="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg text-lg">
+                    Asset Review
+                </a>
+                <a href="/status" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg text-lg">
+                    API Status
+                </a>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mt-8 bg-gray-800 rounded-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Setup Instructions</h2>
+            <div class="text-gray-300 space-y-3">
+                <p><strong>1. On the local machine</strong> (with Claude Code):</p>
+                <pre class="bg-gray-900 p-3 rounded text-sm overflow-x-auto">python -m studio.core.local_worker --workspace "C:\Ptero Dactyl Games" --url ws://YOUR_SERVER:8081/ws/worker</pre>
+
+                <p class="mt-4"><strong>2. Access this server</strong> from any browser to review assets.</p>
+
+                <p class="mt-4"><strong>3. When a worker is connected</strong>, you can:</p>
+                <ul class="list-disc list-inside ml-4">
+                    <li>Scan projects for assets</li>
+                    <li>View generated images</li>
+                    <li>Submit feedback</li>
+                    <li>Request regeneration</li>
+                    <li>Approve final assets</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh status
+        setInterval(() => {
+            fetch('/status')
+                .then(r => r.json())
+                .then(data => {
+                    // Update worker status
+                    const workersDiv = document.getElementById('workers-status');
+                    if (data.workers.length > 0) {
+                        workersDiv.innerHTML = data.workers.map(w => `
+                            <div class="flex items-center space-x-3 mb-2">
+                                <span class="w-3 h-3 bg-green-500 rounded-full"></span>
+                                <span>${w.worker_id}</span>
+                                <span class="text-sm text-gray-400">Connected</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        workersDiv.innerHTML = `
+                            <div class="flex items-center space-x-3">
+                                <span class="w-3 h-3 bg-red-500 rounded-full"></span>
+                                <span class="text-gray-400">No workers connected</span>
+                            </div>
+                        `;
+                    }
+                });
+        }, 5000);
+    </script>
+</body>
+</html>

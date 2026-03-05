@@ -467,6 +467,54 @@ def cmd_test_plan(args, orch: Orchestrator):
     return 0
 
 
+def cmd_remote_server(args, orch: Orchestrator):
+    """Start remote UI server (for VPS deployment)."""
+    try:
+        import uvicorn
+    except ImportError:
+        print("uvicorn not installed. Run: pip install uvicorn fastapi jinja2 websockets")
+        return 1
+
+    print(f"Starting remote UI server at http://{args.host}:{args.port}")
+    print()
+    print("Workers can connect at: ws://{host}:{port}/ws/worker")
+    print("UI clients connect at:  ws://{host}:{port}/ws/ui")
+    print()
+    print("Press Ctrl+C to stop")
+
+    uvicorn.run(
+        "web.remote_server:app",
+        host=args.host,
+        port=args.port,
+        reload=False,
+        log_level="info"
+    )
+    return 0
+
+
+def cmd_worker(args, orch: Orchestrator):
+    """Start local worker (connects to remote server)."""
+    import asyncio
+
+    try:
+        import websockets
+    except ImportError:
+        print("websockets not installed. Run: pip install websockets")
+        return 1
+
+    from core.local_worker import run_worker
+
+    print(f"Starting local worker...")
+    print(f"  Workspace: {args.workspace}")
+    print(f"  Remote server: {args.url}")
+    print(f"  Worker ID: {args.id}")
+    print()
+    print("Press Ctrl+C to stop")
+
+    asyncio.run(run_worker(args.workspace, args.url, args.id))
+    return 0
+
+
 def cmd_migrate(args, orch: Orchestrator):
     """Migrate from JSON to SQLite."""
     workspace = Path(args.workspace)
@@ -616,6 +664,16 @@ Examples:
     migrate_parser.add_argument("--force", "-f", action="store_true", help="Overwrite existing database")
     migrate_parser.add_argument("--archive", "-a", action="store_true", help="Archive JSON file after migration")
 
+    # remote-server - remote UI server (for VPS)
+    remote_parser = subparsers.add_parser("remote-server", help="Start remote UI server for VPS deployment")
+    remote_parser.add_argument("--port", "-p", type=int, default=8081, help="Port (default 8081)")
+    remote_parser.add_argument("--host", default="0.0.0.0", help="Host (default 0.0.0.0 for external access)")
+
+    # worker - local worker (connects to remote)
+    worker_parser = subparsers.add_parser("worker", help="Start local worker (connects to remote server)")
+    worker_parser.add_argument("--url", "-u", default="ws://localhost:8081/ws/worker", help="Remote server WebSocket URL")
+    worker_parser.add_argument("--id", default="local-1", help="Worker ID")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -641,7 +699,9 @@ Examples:
         "inbox": cmd_inbox,
         "web": cmd_web,
         "test-plan": cmd_test_plan,
-        "migrate": cmd_migrate
+        "migrate": cmd_migrate,
+        "remote-server": cmd_remote_server,
+        "worker": cmd_worker
     }
 
     handler = commands.get(args.command)
