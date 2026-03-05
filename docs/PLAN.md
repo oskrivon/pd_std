@@ -33,11 +33,11 @@
   - [ ] CLI: `ptero-studio assets watch` — режим наблюдения
   - [ ] CLI: `ptero-studio assets regenerate <asset_id>` — ручной запуск
 
-- [ ] **Partial UI deploy** (remote access without local API):
-  - [ ] Разделение web UI и генерации (UI → remote, generation → local)
-  - [ ] WebSocket bridge для команд UI → local worker
-  - [ ] Tunnel (ngrok/cloudflared) для доступа к локальному серверу
-  - [ ] Альтернатива: статический UI + polling к local API через tunnel
+- [x] **Partial UI deploy** (remote access without local API):
+  - [x] Разделение web UI и генерации (UI → remote, generation → local)
+  - [x] WebSocket bridge для команд UI → local worker
+  - [ ] Tunnel (ngrok/cloudflared) для доступа к локальному серверу (альтернатива)
+  - [x] Альтернатива: remote server + local worker через WebSocket
 
 ### Следующие улучшения
 
