@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from core.tester_feedback import (
+from .tester_feedback import (
     TesterFeedback,
     TesterFeedbackType,
     TesterFeedbackStatus,
@@ -18,7 +18,7 @@ from core.tester_feedback import (
     AIGenerationIssue,
     AI_ISSUE_DESCRIPTIONS
 )
-from core.task_db import Task, TaskPriority, get_task_db
+from .task_db import Task, TaskPriority, get_task_db
 
 logger = logging.getLogger("studio.tester_feedback")
 

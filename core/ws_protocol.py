@@ -26,6 +26,7 @@ class MessageType(str, Enum):
     CMD_SUBMIT_FEEDBACK = "cmd_submit_feedback"
     CMD_REGENERATE = "cmd_regenerate"
     CMD_APPROVE = "cmd_approve"
+    CMD_SUBMIT_TESTER_FEEDBACK = "cmd_submit_tester_feedback"
 
     # Worker -> Server (responses)
     RESP_ASSETS_LIST = "resp_assets_list"
@@ -35,6 +36,7 @@ class MessageType(str, Enum):
     RESP_GENERATION_STARTED = "resp_generation_started"
     RESP_GENERATION_COMPLETE = "resp_generation_complete"
     RESP_APPROVED = "resp_approved"
+    RESP_TESTER_FEEDBACK_SAVED = "resp_tester_feedback_saved"
     RESP_ERROR = "resp_error"
 
     # Server -> UI (status updates)

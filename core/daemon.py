@@ -403,19 +403,25 @@ DO NOT ask for clarification - make reasonable assumptions and proceed.
 """
 
         cmd = [claude_cmd, "--print", "--dangerously-skip-permissions"]
+        logger.info(f"Claude command: {cmd}")
+        logger.info(f"Working dir: {project.path}")
 
         # Timeout settings
-        idle_timeout = 90  # Kill if no output for 90 seconds
-        max_timeout = 600  # Absolute max 10 minutes
+        idle_timeout = 300  # Kill if no output for 5 minutes (Claude needs time for complex tasks)
+        max_timeout = 1200  # Absolute max 20 minutes
 
         def reader_thread(pipe, queue, name):
             """Read from pipe and put lines into queue."""
+            logger.info(f"Reader thread {name} started")
             try:
                 for line in iter(pipe.readline, ''):
                     if line:
+                        logger.debug(f"Reader {name}: {line[:50]}...")
                         queue.put((name, line))
                 pipe.close()
+                logger.info(f"Reader thread {name} finished")
             except Exception as e:
+                logger.error(f"Reader thread {name} error: {e}")
                 queue.put(('error', str(e)))
 
         try:
@@ -424,6 +430,7 @@ DO NOT ask for clarification - make reasonable assumptions and proceed.
             if sys.platform == "win32":
                 creationflags = subprocess.CREATE_NEW_PROCESS_GROUP
 
+            logger.info(f"Starting subprocess with creationflags={creationflags}")
             proc = subprocess.Popen(
                 cmd,
                 stdin=subprocess.PIPE,
@@ -435,10 +442,13 @@ DO NOT ask for clarification - make reasonable assumptions and proceed.
                 errors='replace',
                 creationflags=creationflags
             )
+            logger.info(f"Process started with PID: {proc.pid}")
 
             # Send prompt and close stdin
+            logger.info(f"Sending prompt ({len(prompt)} chars)...")
             proc.stdin.write(prompt)
             proc.stdin.close()
+            logger.info("Prompt sent, stdin closed")
 
             # Start reader threads
             output_queue = Queue()

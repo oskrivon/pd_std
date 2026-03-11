@@ -92,6 +92,12 @@ async def index(request: Request):
         else:
             task.elapsed_seconds = 0
 
+    # Get assets pending regeneration
+    assets_pending_regen = get_assets_pending_regeneration()
+
+    # Add asset stats
+    stats["assets_pending_regen"] = len(assets_pending_regen)
+
     return templates.TemplateResponse("index.html", {
         "request": request,
         "projects": list(projects.values()),
@@ -100,6 +106,7 @@ async def index(request: Request):
         "completed": completed[-10:],
         "failed": failed[-5:],
         "stats": stats,
+        "assets_pending_regen": assets_pending_regen,
         "daemon_running": daemon_process is not None and daemon_process.poll() is None
     })
 
@@ -148,6 +155,10 @@ async def tasks_list_partial(request: Request, project: Optional[str] = None):
 async def stats_partial(request: Request):
     """Stats partial for polling updates."""
     stats = db.stats()
+
+    # Add asset stats
+    assets_pending_regen = get_assets_pending_regeneration()
+    stats["assets_pending_regen"] = len(assets_pending_regen)
 
     return templates.TemplateResponse("partials/stats.html", {
         "request": request,
@@ -524,12 +535,14 @@ DETAIL_ISSUES = ["add_objects", "remove_objects", "wrong_proportions", "missing_
 
 
 def get_pending_assets():
-    """Get all assets pending review from all projects."""
+    """Get all assets pending review or regeneration from all projects."""
     from core.asset_feedback import AssetHistoryManager
     from core.asset_scanner import AssetScanner, AssetStatus
+    import json
 
     pending = []
     studio_path = WORKSPACE / "studio"
+    generations_path = studio_path / "generations"
 
     for project_name, project in projects.items():
         project_path = project.path
@@ -561,7 +574,129 @@ def get_pending_assets():
                     "history": None
                 })
 
+    # Also include assets with status=pending (waiting regeneration)
+    if generations_path.exists():
+        for project_dir in generations_path.iterdir():
+            if not project_dir.is_dir():
+                continue
+
+            project_name = project_dir.name
+
+            for asset_dir in project_dir.iterdir():
+                if not asset_dir.is_dir():
+                    continue
+
+                history_path = asset_dir / "history.json"
+                if not history_path.exists():
+                    continue
+
+                try:
+                    with open(history_path, 'r', encoding='utf-8') as f:
+                        history_data = json.load(f)
+
+                    # Check if status is pending (not pending_review)
+                    if history_data.get("status") == "pending":
+                        asset_id = history_data.get("asset_id", asset_dir.name)
+
+                        # Skip if already in list
+                        if any(p["asset_id"] == asset_id for p in pending):
+                            continue
+
+                        # Create a simple history-like object for template
+                        class SimpleHistory:
+                            def __init__(self, data):
+                                self.asset_id = data.get("asset_id", "")
+                                self.status = data.get("status", "")
+                                self.current_version = data.get("current_version", 1)
+                                self.spec = data.get("spec", {})
+                                self.generations = []
+                                for gen in data.get("generations", []):
+                                    self.generations.append(type('Gen', (), {
+                                        'version': gen.get('version'),
+                                        'feedback': type('Feedback', (), gen.get('feedback', {}))() if gen.get('feedback') else None,
+                                        'result_path': gen.get('result_path')
+                                    })())
+
+                        pending.append({
+                            "asset_id": asset_id,
+                            "project": history_data.get("project", project_name),
+                            "category": history_data.get("spec", {}).get("category", "misc"),
+                            "version": history_data.get("current_version", 1),
+                            "preview_path": None,
+                            "history": SimpleHistory(history_data)
+                        })
+                except Exception:
+                    continue
+
     return pending
+
+
+def get_assets_pending_regeneration():
+    """Get all assets with status=pending that have feedback (waiting regeneration)."""
+    from core.asset_feedback import AssetHistoryManager
+    import json
+
+    pending_regen = []
+    studio_path = WORKSPACE / "studio"
+    generations_path = studio_path / "generations"
+
+    if not generations_path.exists():
+        return pending_regen
+
+    # Scan all project folders in generations
+    for project_dir in generations_path.iterdir():
+        if not project_dir.is_dir():
+            continue
+
+        project_name = project_dir.name
+
+        # Scan asset folders
+        for asset_dir in project_dir.iterdir():
+            if not asset_dir.is_dir():
+                continue
+
+            history_path = asset_dir / "history.json"
+            if not history_path.exists():
+                continue
+
+            try:
+                with open(history_path, 'r', encoding='utf-8') as f:
+                    history_data = json.load(f)
+
+                # Check if status is pending and has generations with feedback
+                if history_data.get("status") == "pending":
+                    generations = history_data.get("generations", [])
+                    if generations:
+                        latest_gen = generations[-1]
+                        feedback = latest_gen.get("feedback")
+                        if feedback:
+                            # Get latest image path
+                            img_path = None
+                            result_path = latest_gen.get("result_path")
+                            if result_path:
+                                from pathlib import Path
+                                rp = Path(result_path)
+                                if rp.exists():
+                                    img_path = result_path
+                                else:
+                                    # Try relative path
+                                    v_folder = asset_dir / f"v{latest_gen.get('version', 1)}"
+                                    if (v_folder / "result.png").exists():
+                                        img_path = str(v_folder / "result.png")
+
+                            pending_regen.append({
+                                "asset_id": history_data.get("asset_id", asset_dir.name),
+                                "project": history_data.get("project", project_name),
+                                "category": history_data.get("spec", {}).get("category", "misc"),
+                                "version": history_data.get("current_version", 1),
+                                "feedback": feedback,
+                                "image_path": img_path,
+                                "description": history_data.get("spec", {}).get("description", "")
+                            })
+            except Exception as e:
+                continue
+
+    return pending_regen
 
 
 @app.get("/review", response_class=HTMLResponse)

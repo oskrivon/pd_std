@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Review - Ptero Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .checkbox-btn:checked + label {
+            background-color: #7c3aed;
+            border-color: #7c3aed;
+            color: white;
+        }
+        .radio-btn:checked + label {
+            background-color: #7c3aed;
+            border-color: #7c3aed;
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold text-purple-400">🦖 Ptero Studio</a>
+                    <a href="/" class="text-gray-300 hover:text-white">Главная</a>
+                    <a href="/review" class="text-white">Asset Review</a>
+                    <a href="/tester/feedback" class="text-gray-300 hover:text-white">Фидбек</a>
+                </div>
+                <div id="worker-status" class="text-sm">
+                    {% if worker_online %}
+                    <span class="text-green-400">● Worker Online</span>
+                    {% else %}
+                    <span class="text-red-400">● Worker Offline</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6" x-data="assetReview()">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Asset Review</h1>
+            <button @click="loadAssets()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg">
+                🔄 Обновить
+            </button>
+        </div>
+
+        <!-- Loading -->
+        <div x-show="loading" class="text-center py-12">
+            <div class="text-4xl animate-pulse">⏳</div>
+            <p class="text-gray-400 mt-2">Загрузка ассетов...</p>
+        </div>
+
+        <!-- No worker -->
+        <div x-show="!connected && !loading" class="bg-yellow-900/30 border border-yellow-700 rounded-lg p-8 text-center">
+            <div class="text-4xl mb-4">⚠️</div>
+            <h2 class="text-xl font-bold mb-2">Worker не подключён</h2>
+            <p class="text-gray-400 mb-4">Запустите локальный worker для доступа к ассетам</p>
+            <code class="bg-gray-900 px-4 py-2 rounded block text-sm">
+                python -m studio.core.local_worker --url ws://194.59.30.210:8081/ws/worker
+            </code>
+        </div>
+
+        <!-- Assets Grid -->
+        <div x-show="connected && !loading && !selectedAsset" class="grid grid-cols-4 gap-4">
+            <template x-for="asset in assets" :key="asset.asset_id">
+                <div class="bg-gray-800 rounded-lg overflow-hidden hover:ring-2 hover:ring-purple-500 cursor-pointer"
+                     @click="selectAsset(asset)">
+                    <div class="aspect-square bg-gray-700 flex items-center justify-center">
+                        <template x-if="asset.latest_image">
+                            <img :src="'data:image/png;base64,' + asset.latest_image" class="w-full h-full object-cover">
+                        </template>
+                        <template x-if="!asset.latest_image">
+                            <span class="text-4xl text-gray-500">🖼️</span>
+                        </template>
+                    </div>
+                    <div class="p-3">
+                        <div class="font-medium truncate" x-text="asset.asset_id"></div>
+                        <div class="text-sm text-gray-400" x-text="asset.project + ' / ' + asset.category"></div>
+                        <div class="mt-1">
+                            <span class="text-xs px-2 py-0.5 rounded"
+                                  :class="{
+                                      'bg-yellow-900 text-yellow-300': asset.status === 'pending_review',
+                                      'bg-green-900 text-green-300': asset.status === 'approved',
+                                      'bg-gray-700 text-gray-300': asset.status === 'pending'
+                                  }"
+                                  x-text="asset.status"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- No assets -->
+        <div x-show="connected && !loading && assets.length === 0 && !selectedAsset" class="text-center py-12 text-gray-500">
+            Нет ассетов для ревью
+        </div>
+
+        <!-- Asset Detail Modal -->
+        <div x-show="selectedAsset" x-cloak class="fixed inset-0 z-50 overflow-y-auto">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div class="fixed inset-0 bg-black/70" @click="closeDetail()"></div>
+
+                <div class="relative bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                    <!-- Header -->
+                    <div class="sticky top-0 bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
+                        <div>
+                            <h2 class="text-xl font-bold" x-text="selectedAsset?.asset_id"></h2>
+                            <div class="text-sm text-gray-400" x-text="selectedAsset?.project + ' / ' + selectedAsset?.category"></div>
+                        </div>
+                        <button @click="closeDetail()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="p-6">
+                        <!-- Loading detail -->
+                        <div x-show="loadingDetail" class="text-center py-12">
+                            <div class="text-4xl animate-pulse">⏳</div>
+                        </div>
+
+                        <!-- Detail content -->
+                        <div x-show="!loadingDetail && assetDetail">
+                            <!-- Main Image -->
+                            <div class="bg-gray-900 rounded-lg p-4 mb-6">
+                                <template x-if="currentImage">
+                                    <img :src="'data:image/png;base64,' + currentImage"
+                                         class="max-w-full h-auto mx-auto rounded"
+                                         style="image-rendering: pixelated; max-height: 400px;">
+                                </template>
+                                <template x-if="!currentImage">
+                                    <div class="text-center py-20 text-gray-500">Изображение не найдено</div>
+                                </template>
+                            </div>
+
+                            <!-- Version History -->
+                            <template x-if="assetDetail?.generations?.length > 1">
+                                <div class="mb-6">
+                                    <h3 class="text-sm font-medium text-gray-400 mb-2">История версий</h3>
+                                    <div class="flex gap-2 overflow-x-auto pb-2">
+                                        <template x-for="gen in assetDetail.generations" :key="gen.version">
+                                            <button @click="selectVersion(gen)"
+                                                    class="flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden"
+                                                    :class="currentVersion === gen.version ? 'border-purple-500' : 'border-gray-600 hover:border-gray-500'">
+                                                <template x-if="gen.image_data">
+                                                    <img :src="'data:image/png;base64,' + gen.image_data"
+                                                         class="w-full h-full object-cover" style="image-rendering: pixelated;">
+                                                </template>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Quick Actions -->
+                            <div class="flex gap-3 mb-6">
+                                <button @click="approve()" :disabled="processing"
+                                        class="flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg font-medium">
+                                    <span x-show="!processing">✓ Approve</span>
+                                    <span x-show="processing">⏳</span>
+                                </button>
+                                <button @click="regenerate()" :disabled="processing"
+                                        class="flex-1 py-3 px-4 bg-yellow-600 hover:bg-yellow-700 disabled:opacity-50 rounded-lg font-medium">
+                                    <span x-show="!processing">🔄 Regenerate</span>
+                                    <span x-show="processing">⏳</span>
+                                </button>
+                            </div>
+
+                            <!-- Feedback Form -->
+                            <div class="border-t border-gray-700 pt-6">
+                                <h4 class="text-sm font-medium text-gray-400 mb-3">Запросить изменения:</h4>
+
+                                <!-- Issue checkboxes -->
+                                <div class="grid grid-cols-2 gap-4 mb-6">
+                                    <div>
+                                        <h5 class="text-sm font-medium text-gray-300 mb-2">Цвета</h5>
+                                        <div class="space-y-1">
+                                            <template x-for="issue in colorIssues" :key="issue.value">
+                                                <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-700 cursor-pointer">
+                                                    <input type="checkbox" :value="issue.value" x-model="selectedIssues" class="rounded bg-gray-700">
+                                                    <span class="text-sm" x-text="issue.label"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h5 class="text-sm font-medium text-gray-300 mb-2">Композиция</h5>
+                                        <div class="space-y-1">
+                                            <template x-for="issue in compositionIssues" :key="issue.value">
+                                                <label class="flex items-center gap-2 p-2 rounded hover:bg-gray-700 cursor-pointer">
+                                                    <input type="checkbox" :value="issue.value" x-model="selectedIssues" class="rounded bg-gray-700">
+                                                    <span class="text-sm" x-text="issue.label"></span>
+                                                </label>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Free text -->
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Комментарий</label>
+                                    <textarea x-model="freeText" rows="3"
+                                              class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:border-purple-500 outline-none"
+                                              placeholder="Опишите что изменить..."></textarea>
+                                </div>
+
+                                <!-- Intensity -->
+                                <div class="mb-6">
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Масштаб изменений</label>
+                                    <div class="flex gap-2">
+                                        <template x-for="int in intensities" :key="int.value">
+                                            <label class="flex-1 text-center">
+                                                <input type="radio" name="intensity" :value="int.value" x-model="changeIntensity" class="hidden">
+                                                <span class="block py-2 px-4 text-sm rounded border cursor-pointer"
+                                                      :class="changeIntensity === int.value ? 'bg-purple-600 border-purple-600' : 'border-gray-600 hover:border-gray-500'"
+                                                      x-text="int.label"></span>
+                                            </label>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <button @click="requestRevision()" :disabled="processing"
+                                        class="w-full py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 rounded-lg font-medium">
+                                    Запросить изменения
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+    function assetReview() {
+        return {
+            connected: false,
+            loading: false,
+            assets: [],
+            ws: null,
+
+            // Detail view
+            selectedAsset: null,
+            assetDetail: null,
+            loadingDetail: false,
+            currentImage: null,
+            currentVersion: 1,
+            processing: false,
+
+            // Feedback form
+            selectedIssues: [],
+            freeText: '',
+            changeIntensity: 'moderate',
+
+            // Issue options
+            colorIssues: [
+                { value: 'too_dark', label: 'Слишком темно' },
+                { value: 'too_bright', label: 'Слишком ярко' },
+                { value: 'wrong_palette', label: 'Неправильная палитра' },
+                { value: 'low_contrast', label: 'Низкий контраст' }
+            ],
+            compositionIssues: [
+                { value: 'too_cluttered', label: 'Слишком много деталей' },
+                { value: 'too_empty', label: 'Слишком пусто' },
+                { value: 'bad_balance', label: 'Плохой баланс' }
+            ],
+            intensities: [
+                { value: 'minimal', label: 'Минимальные' },
+                { value: 'moderate', label: 'Умеренные' },
+                { value: 'major', label: 'Существенные' }
+            ],
+
+            init() {
+                this.connect();
+            },
+
+            connect() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/ui`);
+
+                this.ws.onopen = () => {
+                    this.connected = true;
+                    this.loadAssets();
+                };
+
+                this.ws.onclose = () => {
+                    this.connected = false;
+                    setTimeout(() => this.connect(), 3000);
+                };
+
+                this.ws.onmessage = (event) => {
+                    const msg = JSON.parse(event.data);
+                    this.handleMessage(msg);
+                };
+            },
+
+            handleMessage(msg) {
+                console.log('Received:', msg.type);
+
+                if (msg.type === 'resp_assets_list') {
+                    this.assets = msg.payload.assets || [];
+                    this.loading = false;
+                } else if (msg.type === 'resp_asset_detail') {
+                    this.assetDetail = msg.payload;
+                    this.loadingDetail = false;
+                    if (this.assetDetail.generations?.length > 0) {
+                        const latest = this.assetDetail.generations[this.assetDetail.generations.length - 1];
+                        this.currentImage = latest.image_data;
+                        this.currentVersion = latest.version;
+                    }
+                } else if (msg.type === 'resp_approved') {
+                    this.processing = false;
+                    alert('Ассет одобрен!');
+                    this.closeDetail();
+                    this.loadAssets();
+                } else if (msg.type === 'resp_feedback_saved') {
+                    this.processing = false;
+                    alert('Фидбек сохранён');
+                    this.closeDetail();
+                    this.loadAssets();
+                } else if (msg.type === 'resp_generation_complete') {
+                    this.processing = false;
+                    if (msg.payload.success) {
+                        alert('Регенерация завершена!');
+                        this.loadAssetDetail(this.selectedAsset);
+                    } else {
+                        alert('Ошибка регенерации');
+                    }
+                } else if (msg.type === 'resp_error') {
+                    this.loading = false;
+                    this.loadingDetail = false;
+                    this.processing = false;
+                    alert('Ошибка: ' + msg.payload.error);
+                } else if (msg.type === 'status_worker_online') {
+                    this.connected = true;
+                } else if (msg.type === 'status_worker_offline') {
+                    this.connected = false;
+                }
+            },
+
+            loadAssets() {
+                if (!this.connected) return;
+                this.loading = true;
+                this.ws.send(JSON.stringify({
+                    type: 'cmd_scan_assets',
+                    request_id: Date.now().toString()
+                }));
+            },
+
+            selectAsset(asset) {
+                this.selectedAsset = asset;
+                this.loadAssetDetail(asset);
+            },
+
+            loadAssetDetail(asset) {
+                this.loadingDetail = true;
+                this.assetDetail = null;
+                this.currentImage = null;
+                this.ws.send(JSON.stringify({
+                    type: 'cmd_get_asset',
+                    request_id: Date.now().toString(),
+                    payload: {
+                        project: asset.project,
+                        category: asset.category,
+                        asset_id: asset.asset_id
+                    }
+                }));
+            },
+
+            selectVersion(gen) {
+                this.currentVersion = gen.version;
+                this.currentImage = gen.image_data;
+            },
+
+            closeDetail() {
+                this.selectedAsset = null;
+                this.assetDetail = null;
+                this.selectedIssues = [];
+                this.freeText = '';
+                this.changeIntensity = 'moderate';
+            },
+
+            approve() {
+                this.processing = true;
+                this.ws.send(JSON.stringify({
+                    type: 'cmd_approve',
+                    request_id: Date.now().toString(),
+                    payload: {
+                        project: this.selectedAsset.project,
+                        category: this.selectedAsset.category,
+                        asset_id: this.selectedAsset.asset_id
+                    }
+                }));
+            },
+
+            regenerate() {
+                this.processing = true;
+                this.ws.send(JSON.stringify({
+                    type: 'cmd_regenerate',
+                    request_id: Date.now().toString(),
+                    payload: {
+                        project: this.selectedAsset.project,
+                        category: this.selectedAsset.category,
+                        asset_id: this.selectedAsset.asset_id
+                    }
+                }));
+            },
+
+            requestRevision() {
+                this.processing = true;
+                this.ws.send(JSON.stringify({
+                    type: 'cmd_submit_feedback',
+                    request_id: Date.now().toString(),
+                    payload: {
+                        project: this.selectedAsset.project,
+                        category: this.selectedAsset.category,
+                        asset_id: this.selectedAsset.asset_id,
+                        decision: 'revision_requested',
+                        issues: this.selectedIssues,
+                        free_text: this.freeText,
+                        change_intensity: this.changeIntensity
+                    }
+                }));
+            }
+        }
+    }
+    </script>
+</body>
+</html>

@@ -42,6 +42,17 @@ class AssetSpec:
         """Нужен ли ревью?"""
         return self.status == AssetStatus.PENDING_REVIEW
 
+    def to_dict(self) -> dict:
+        """Конвертировать в словарь."""
+        return {
+            "asset_id": self.asset_id,
+            "category": self.category,
+            "status": self.status.value if isinstance(self.status, AssetStatus) else self.status,
+            "spec": self.spec,
+            "path": self.path,
+            "project": self.project
+        }
+
 
 class AssetScanner:
     """Сканер ассетов проекта."""

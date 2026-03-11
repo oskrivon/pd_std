@@ -84,9 +84,21 @@
                             <div class="flex-1 min-w-0">
                                 <div class="font-medium truncate">{{ asset.asset_id }}</div>
                                 <div class="text-sm text-gray-400">{{ asset.project }} / {{ asset.category }}</div>
+                                {% if asset.history and asset.history.generations and asset.history.generations[-1].feedback %}
+                                <div class="text-xs text-orange-400 mt-1 truncate" title="{{ asset.history.generations[-1].feedback.free_text }}">
+                                    💬 {{ asset.history.generations[-1].feedback.free_text[:30] }}{% if asset.history.generations[-1].feedback.free_text|length > 30 %}...{% endif %}
+                                </div>
+                                {% endif %}
                             </div>
-                            <div class="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">
-                                v{{ asset.version or 1 }}
+                            <div class="flex flex-col items-end gap-1">
+                                <div class="text-xs px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">
+                                    v{{ asset.version or 1 }}
+                                </div>
+                                {% if asset.history and asset.history.status == 'pending' and asset.history.generations and asset.history.generations[-1].feedback %}
+                                <div class="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded">
+                                    🔄 regen
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                     </a>

@@ -1,7 +1,7 @@
 <!-- Stats cards partial - auto-refreshed by HTMX -->
 <div class="bg-gray-800 rounded-lg p-4 text-center">
     <div class="text-3xl font-bold text-yellow-400">{{ stats.pending }}</div>
-    <div class="text-sm text-gray-400">Pending</div>
+    <div class="text-sm text-gray-400">Pending Tasks</div>
 </div>
 <div class="bg-gray-800 rounded-lg p-4 text-center">
     <div class="text-3xl font-bold text-blue-400">{{ stats.in_progress }}</div>
@@ -15,3 +15,12 @@
     <div class="text-3xl font-bold text-red-400">{{ stats.failed }}</div>
     <div class="text-sm text-gray-400">Failed</div>
 </div>
+{% if stats.assets_pending_regen %}
+<div class="bg-gray-800 rounded-lg p-4 text-center col-span-4 mt-2">
+    <div class="flex items-center justify-center space-x-3">
+        <span class="text-2xl">🎨</span>
+        <div class="text-xl font-bold text-purple-400">{{ stats.assets_pending_regen }}</div>
+        <div class="text-sm text-gray-400">Assets Pending Regeneration</div>
+    </div>
+</div>
+{% endif %}

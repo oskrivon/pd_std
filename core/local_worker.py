@@ -9,12 +9,11 @@ import asyncio
 import base64
 import logging
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 import json
 
 try:
     import websockets
-    from websockets.client import WebSocketClientProtocol
 except ImportError:
     websockets = None
 
@@ -26,6 +25,8 @@ from .ws_protocol import (
 from .asset_feedback import AssetHistoryManager, AssetFeedback, ReviewDecision, FeedbackIssue, ChangeIntensity, SpecificRequest
 from .asset_scanner import AssetScanner
 from .feedback_processor import FeedbackProcessor
+from .tester_feedback import TesterFeedback, TesterFeedbackStorage, TesterFeedbackType, BugSeverity, TesterFeedbackStatus
+from .tester_feedback_processor import TesterFeedbackProcessor
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class LocalWorker:
         self.worker_id = worker_id
         self.on_regenerate = on_regenerate  # Callback for regeneration
 
-        self._ws: Optional[WebSocketClientProtocol] = None
+        self._ws: Optional[Any] = None  # websockets connection
         self._running = False
         self._reconnect_delay = 5
 
@@ -96,12 +97,28 @@ class LocalWorker:
                 pass
             self._ws = None
 
+    def _is_connection_closed(self) -> bool:
+        """Check if WebSocket connection is closed (supports both old and new websockets API)."""
+        if not self._ws:
+            return True
+        # websockets 14+ uses state attribute
+        if hasattr(self._ws, 'state'):
+            try:
+                from websockets.protocol import State
+                return self._ws.state in (State.CLOSED, State.CLOSING)
+            except ImportError:
+                pass
+        # Older websockets use closed attribute
+        if hasattr(self._ws, 'closed'):
+            return self._ws.closed
+        return False
+
     async def run(self):
         """Main loop - connect and process messages."""
         self._running = True
 
         while self._running:
-            if not self._ws or self._ws.closed:
+            if self._is_connection_closed():
                 if not await self.connect():
                     logger.info(f"Reconnecting in {self._reconnect_delay}s...")
                     await asyncio.sleep(self._reconnect_delay)
@@ -130,7 +147,7 @@ class LocalWorker:
 
     async def _heartbeat_loop(self):
         """Send periodic heartbeats."""
-        while self._running and self._ws and not self._ws.closed:
+        while self._running and not self._is_connection_closed():
             try:
                 msg = WSMessage(
                     type=MessageType.WORKER_HEARTBEAT,
@@ -154,6 +171,7 @@ class LocalWorker:
                 MessageType.CMD_SUBMIT_FEEDBACK: self._handle_feedback,
                 MessageType.CMD_REGENERATE: self._handle_regenerate,
                 MessageType.CMD_APPROVE: self._handle_approve,
+                MessageType.CMD_SUBMIT_TESTER_FEEDBACK: self._handle_tester_feedback,
             }.get(msg.type)
 
             if handler:
@@ -197,6 +215,11 @@ class LocalWorker:
                 latest_image = None
                 if history.generations:
                     img_path = Path(history.generations[-1].result_path)
+                    if not img_path.exists():
+                        # Fallback: try assets/{category}/{asset_id}.png
+                        fallback_path = project_dir / "assets" / spec.category / f"{spec.asset_id.replace('bg_', '')}.png"
+                        if fallback_path.exists():
+                            img_path = fallback_path
                     if img_path.exists():
                         latest_image = self._image_to_base64(img_path, max_size=200)
 
@@ -230,6 +253,11 @@ class LocalWorker:
         for gen in history.generations:
             img_data = None
             img_path = Path(gen.result_path)
+            if not img_path.exists():
+                # Fallback: try assets/{category}/{asset_id}.png
+                fallback_path = project_path / "assets" / category / f"{asset_id.replace('bg_', '')}.png"
+                if fallback_path.exists():
+                    img_path = fallback_path
             if img_path.exists():
                 img_data = self._image_to_base64(img_path)
 
@@ -394,6 +422,80 @@ class LocalWorker:
         return create_response(
             MessageType.RESP_APPROVED,
             {"asset_id": asset_id, "success": success, "target_path": str(target)},
+            msg.request_id
+        )
+
+    async def _handle_tester_feedback(self, msg: WSMessage) -> WSMessage:
+        """Handle tester feedback from remote server - create local Task."""
+        from .tester_feedback import TesterScreenshot
+
+        p = msg.payload
+
+        logger.info(f"Received tester feedback: {p.get('id')} - {p.get('title')}")
+
+        # Save screenshots locally from base64
+        screenshots = []
+        if p.get("screenshots"):
+            screenshots_dir = self.studio_path / "tester_feedback" / "screenshots" / p.get("id", "unknown")
+            screenshots_dir.mkdir(parents=True, exist_ok=True)
+
+            for s in p.get("screenshots", []):
+                if s.get("base64"):
+                    filename = s.get("filename", "screenshot.png")
+                    file_path = screenshots_dir / filename
+
+                    # Decode and save
+                    img_data = base64.b64decode(s["base64"])
+                    file_path.write_bytes(img_data)
+
+                    logger.info(f"Saved screenshot: {file_path} ({len(img_data)} bytes)")
+
+                    screenshots.append(TesterScreenshot(
+                        filename=filename,
+                        path=str(file_path),
+                        description=s.get("description", "")
+                    ))
+
+        # Convert to TesterFeedback object
+        feedback = TesterFeedback(
+            id=p.get("id", ""),
+            project=p.get("project", ""),
+            feedback_type=TesterFeedbackType(p.get("feedback_type", "game_bug")),
+            title=p.get("title", ""),
+            description=p.get("description", ""),
+            tester_name=p.get("tester_name"),
+            tester_email=p.get("tester_email"),
+            submitted_at=p.get("submitted_at", ""),
+            status=TesterFeedbackStatus.NEW,
+            steps_to_reproduce=p.get("steps_to_reproduce"),
+            expected_behavior=p.get("expected_behavior"),
+            actual_behavior=p.get("actual_behavior"),
+            bug_severity=BugSeverity(p["bug_severity"]) if p.get("bug_severity") else None,
+            balance_area=p.get("balance_area"),
+            ai_issues=p.get("ai_issues", []),
+            asset_id=p.get("asset_id"),
+            screenshots=screenshots
+        )
+
+        # Save locally
+        storage = TesterFeedbackStorage(self.studio_path)
+        storage.save(feedback)
+
+        # Process to create Task
+        processor = TesterFeedbackProcessor(storage, self.workspace)
+        task = processor.process(feedback)
+
+        task_id = task.id if task else None
+
+        logger.info(f"Created Task {task_id} for feedback {feedback.id} with {len(screenshots)} screenshots")
+
+        return create_response(
+            MessageType.RESP_TESTER_FEEDBACK_SAVED,
+            {
+                "feedback_id": feedback.id,
+                "task_id": task_id,
+                "status": feedback.status.value
+            },
             msg.request_id
         )
 

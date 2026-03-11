@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Все фидбеки - Ptero Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold text-purple-400">🦖 Ptero Studio</a>
+                    <a href="/" class="text-gray-300 hover:text-white">Главная</a>
+                    <a href="/review" class="text-gray-300 hover:text-white">Asset Review</a>
+                    <a href="/tester/feedback" class="text-gray-300 hover:text-white">Фидбек</a>
+                    <a href="/tester/feedback/list" class="text-white">Все фидбеки</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold">Фидбеки тестеров</h1>
+            <a href="/tester/feedback" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg">+ Новый</a>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div class="text-3xl font-bold">{{ stats.total }}</div>
+                <div class="text-gray-400 text-sm">Всего</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div class="text-3xl font-bold text-blue-400">{{ stats.new }}</div>
+                <div class="text-gray-400 text-sm">Новых</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 text-center">
+                <div class="text-3xl font-bold text-green-400">{{ stats.resolved }}</div>
+                <div class="text-gray-400 text-sm">Решено</div>
+            </div>
+        </div>
+
+        <!-- List -->
+        <div class="space-y-3">
+            {% for feedback in feedbacks %}
+            <div class="bg-gray-800 rounded-lg p-4 hover:bg-gray-750">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <span class="text-xl">
+                                {% if feedback.feedback_type == 'game_bug' %}🐛
+                                {% elif feedback.feedback_type == 'balance' %}⚖️
+                                {% else %}🎨{% endif %}
+                            </span>
+                            <h3 class="font-medium">{{ feedback.title }}</h3>
+                            <span class="px-2 py-0.5 rounded text-xs
+                                {% if feedback.status == 'new' %}bg-blue-900 text-blue-300
+                                {% elif feedback.status == 'resolved' %}bg-green-900 text-green-300
+                                {% else %}bg-gray-700 text-gray-300{% endif %}">
+                                {{ feedback.status }}
+                            </span>
+                            {% if feedback.bug_severity %}
+                            <span class="px-2 py-0.5 rounded text-xs
+                                {% if feedback.bug_severity == 'critical' %}bg-red-900 text-red-300
+                                {% elif feedback.bug_severity == 'major' %}bg-orange-900 text-orange-300
+                                {% else %}bg-gray-700 text-gray-300{% endif %}">
+                                {{ feedback.bug_severity }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        <p class="text-gray-400 text-sm line-clamp-2">{{ feedback.description[:200] }}</p>
+                        <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                            <span>{{ feedback.project }}</span>
+                            <span>{{ feedback.submitted_at[:10] }}</span>
+                            {% if feedback.tester_name %}
+                            <span>от {{ feedback.tester_name }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="text-gray-500 text-sm font-mono">{{ feedback.id }}</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+                Нет фидбеков
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+</body>
+</html>

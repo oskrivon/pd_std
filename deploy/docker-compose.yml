@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  ptero-remote:
+    build: .
+    container_name: ptero-studio-remote
+    ports:
+      - "8081:8081"
+    restart: always
+    environment:
+      - TZ=Europe/Moscow
+    volumes:
+      - ./data:/app/data

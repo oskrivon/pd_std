@@ -56,6 +56,62 @@
         {% include "partials/in_progress.html" %}
     </div>
 
+    <!-- Assets Pending Regeneration -->
+    {% if assets_pending_regen %}
+    <div class="bg-gray-800 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-purple-400">🎨 Assets Pending Regeneration ({{ assets_pending_regen|length }})</h2>
+            <a href="/review" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm">
+                Open Review
+            </a>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for asset in assets_pending_regen %}
+            <div class="bg-gray-700 rounded-lg p-3 flex space-x-3">
+                <!-- Thumbnail -->
+                <div class="w-16 h-16 bg-gray-600 rounded flex-shrink-0 overflow-hidden">
+                    {% if asset.image_path %}
+                    <img src="/generations/{{ asset.project }}/{{ asset.asset_id }}/v{{ asset.version }}/result.png"
+                         class="w-full h-full object-cover" alt="{{ asset.asset_id }}"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="w-full h-full items-center justify-center text-2xl hidden">🖼️</div>
+                    {% else %}
+                    <div class="w-full h-full flex items-center justify-center text-2xl">🖼️</div>
+                    {% endif %}
+                </div>
+                <!-- Info -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs px-2 py-0.5 rounded bg-gray-600">{{ asset.project }}</span>
+                        <span class="text-xs px-2 py-0.5 rounded bg-purple-600/50">v{{ asset.version }}</span>
+                    </div>
+                    <p class="font-medium text-sm mt-1 truncate">{{ asset.asset_id }}</p>
+                    {% if asset.feedback %}
+                    <div class="mt-1">
+                        {% if asset.feedback.free_text %}
+                        <p class="text-xs text-gray-400 truncate" title="{{ asset.feedback.free_text }}">
+                            💬 {{ asset.feedback.free_text[:50] }}{% if asset.feedback.free_text|length > 50 %}...{% endif %}
+                        </p>
+                        {% endif %}
+                        {% if asset.feedback.issues %}
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            {% for issue in asset.feedback.issues[:3] %}
+                            <span class="text-xs px-1.5 py-0.5 bg-orange-600/30 text-orange-300 rounded">{{ issue }}</span>
+                            {% endfor %}
+                            {% if asset.feedback.issues|length > 3 %}
+                            <span class="text-xs text-gray-500">+{{ asset.feedback.issues|length - 3 }}</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Main grid -->
     <div class="grid grid-cols-3 gap-6">
         <!-- Add task form -->

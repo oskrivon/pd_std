@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отправить фидбек - Ptero Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex items-center justify-between h-14">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold text-purple-400">🦖 Ptero Studio</a>
+                    <a href="/" class="text-gray-300 hover:text-white">Главная</a>
+                    <a href="/review" class="text-gray-300 hover:text-white">Asset Review</a>
+                    <a href="/tester/feedback" class="text-white">Фидбек</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-2xl mx-auto px-4 py-6" x-data="{ feedbackType: 'game_bug' }">
+        <h1 class="text-2xl font-bold mb-6">Отправить фидбек</h1>
+
+        <form action="/tester/feedback/submit" method="POST" enctype="multipart/form-data" class="bg-gray-800 rounded-lg p-6 space-y-6">
+            <!-- Проект -->
+            <div>
+                <label class="block text-sm font-medium mb-2">Проект *</label>
+                <select name="project" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                    <option value="">Выберите проект...</option>
+                    <option value="babylon">babylon</option>
+                    <option value="backpack_hero">backpack_hero</option>
+                    <option value="hamster">hamster</option>
+                </select>
+            </div>
+
+            <!-- Тип фидбека -->
+            <div>
+                <label class="block text-sm font-medium mb-2">Тип проблемы *</label>
+                <div class="grid grid-cols-3 gap-3">
+                    <label class="relative">
+                        <input type="radio" name="feedback_type" value="game_bug" x-model="feedbackType" class="peer sr-only" checked>
+                        <div class="border border-gray-600 rounded-lg px-4 py-3 text-center cursor-pointer peer-checked:border-purple-500 peer-checked:bg-purple-900/30 hover:border-gray-500">
+                            <span class="text-2xl block mb-1">🐛</span>
+                            <span class="text-sm">Баг</span>
+                        </div>
+                    </label>
+                    <label class="relative">
+                        <input type="radio" name="feedback_type" value="balance" x-model="feedbackType" class="peer sr-only">
+                        <div class="border border-gray-600 rounded-lg px-4 py-3 text-center cursor-pointer peer-checked:border-purple-500 peer-checked:bg-purple-900/30 hover:border-gray-500">
+                            <span class="text-2xl block mb-1">⚖️</span>
+                            <span class="text-sm">Баланс</span>
+                        </div>
+                    </label>
+                    <label class="relative">
+                        <input type="radio" name="feedback_type" value="ai_generation" x-model="feedbackType" class="peer sr-only">
+                        <div class="border border-gray-600 rounded-lg px-4 py-3 text-center cursor-pointer peer-checked:border-purple-500 peer-checked:bg-purple-900/30 hover:border-gray-500">
+                            <span class="text-2xl block mb-1">🎨</span>
+                            <span class="text-sm">AI-арт</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Имя и email -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">Ваше имя</label>
+                    <input type="text" name="tester_name" placeholder="Аноним" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Email</label>
+                    <input type="email" name="tester_email" placeholder="your@email.com" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                </div>
+            </div>
+
+            <!-- Заголовок -->
+            <div>
+                <label class="block text-sm font-medium mb-2">Краткое описание *</label>
+                <input type="text" name="title" required placeholder="Например: Игра крашится при открытии инвентаря" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+            </div>
+
+            <!-- Описание -->
+            <div>
+                <label class="block text-sm font-medium mb-2">Подробное описание *</label>
+                <textarea name="description" required rows="4" placeholder="Опишите проблему подробно..." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+            </div>
+
+            <!-- Bug fields -->
+            <div x-show="feedbackType === 'game_bug'" x-cloak class="space-y-4 border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium">Информация о баге</h3>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Критичность</label>
+                    <select name="bug_severity" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="">Выберите...</option>
+                        <option value="critical">Критический</option>
+                        <option value="major">Важный</option>
+                        <option value="minor">Незначительный</option>
+                        <option value="cosmetic">Косметический</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Шаги воспроизведения</label>
+                    <textarea name="steps_to_reproduce" rows="3" placeholder="1. Открыть игру&#10;2. Нажать X&#10;3. ..." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Ожидаемое</label>
+                        <textarea name="expected_behavior" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Фактическое</label>
+                        <textarea name="actual_behavior" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Balance fields -->
+            <div x-show="feedbackType === 'balance'" x-cloak class="space-y-4 border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium">Проблема баланса</h3>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Область</label>
+                    <select name="balance_area" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="">Выберите...</option>
+                        <option value="difficulty">Сложность</option>
+                        <option value="progression">Прогрессия</option>
+                        <option value="economy">Экономика</option>
+                        <option value="combat">Боевая система</option>
+                        <option value="other">Другое</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- AI fields -->
+            <div x-show="feedbackType === 'ai_generation'" x-cloak class="space-y-4 border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium">Проблема с AI-артом</h3>
+                <div>
+                    <label class="block text-sm font-medium mb-2">ID ассета</label>
+                    <input type="text" name="asset_id" placeholder="например: background_forest" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2">Проблемы</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-700">
+                            <input type="checkbox" name="ai_issues" value="wrong_style" class="rounded bg-gray-700">
+                            <span class="text-sm">Неправильный стиль</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-700">
+                            <input type="checkbox" name="ai_issues" value="artifacts" class="rounded bg-gray-700">
+                            <span class="text-sm">Артефакты</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-700">
+                            <input type="checkbox" name="ai_issues" value="wrong_colors" class="rounded bg-gray-700">
+                            <span class="text-sm">Неправильные цвета</span>
+                        </label>
+                        <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-700">
+                            <input type="checkbox" name="ai_issues" value="low_quality" class="rounded bg-gray-700">
+                            <span class="text-sm">Низкое качество</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Скриншоты -->
+            <div class="border-t border-gray-700 pt-4">
+                <label class="block text-sm font-medium mb-2">Скриншоты</label>
+                <div x-data="{
+                    files: [],
+                    previews: [],
+                    handleFiles(e) {
+                        const newFiles = Array.from(e.target.files);
+                        newFiles.forEach(file => {
+                            if (file.type.startsWith('image/')) {
+                                this.files.push(file);
+                                const reader = new FileReader();
+                                reader.onload = (e) => this.previews.push(e.target.result);
+                                reader.readAsDataURL(file);
+                            }
+                        });
+                    },
+                    removeFile(index) {
+                        this.files.splice(index, 1);
+                        this.previews.splice(index, 1);
+                    }
+                }">
+                    <div class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-gray-500 transition-colors">
+                        <input type="file" name="screenshots" multiple accept="image/*"
+                               @change="handleFiles"
+                               class="hidden" id="screenshot-input">
+                        <label for="screenshot-input" class="cursor-pointer">
+                            <span class="text-4xl block mb-2">📷</span>
+                            <span class="text-gray-400">Нажмите или перетащите изображения</span>
+                            <span class="text-xs text-gray-500 block mt-1">PNG, JPG до 10MB</span>
+                        </label>
+                    </div>
+
+                    <!-- Превью -->
+                    <div x-show="previews.length > 0" class="grid grid-cols-4 gap-3 mt-4">
+                        <template x-for="(preview, index) in previews" :key="index">
+                            <div class="relative group">
+                                <img :src="preview" class="w-full h-24 object-cover rounded-lg">
+                                <button type="button" @click="removeFile(index)"
+                                        class="absolute top-1 right-1 w-6 h-6 bg-red-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                                    ✕
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit -->
+            <div class="flex justify-end space-x-4">
+                <a href="/" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg">Отмена</a>
+                <button type="submit" class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium">Отправить</button>
+            </div>
+        </form>
+    </main>
+</body>
+</html>
