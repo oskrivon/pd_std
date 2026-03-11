@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Фидбек тестера - Ptero Studio{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto" x-data="feedbackForm()">
+    <h1 class="text-2xl font-bold mb-6">Отправить фидбек</h1>
+
+    <form action="/tester/feedback/submit" method="POST" enctype="multipart/form-data"
+          class="bg-gray-800 rounded-lg p-6 space-y-6">
+
+        <!-- Проект -->
+        <div>
+            <label class="block text-sm font-medium mb-2">Проект *</label>
+            <select name="project" required
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                <option value="">Выберите проект...</option>
+                {% for project in projects %}
+                <option value="{{ project.name }}" {% if project.name == selected_project %}selected{% endif %}>
+                    {{ project.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Тип фидбека -->
+        <div>
+            <label class="block text-sm font-medium mb-2">Тип проблемы *</label>
+            <div class="grid grid-cols-3 gap-3">
+                {% for type in feedback_types %}
+                <label class="relative">
+                    <input type="radio" name="feedback_type" value="{{ type.value }}"
+                           x-model="feedbackType"
+                           class="peer sr-only" {% if loop.first %}checked{% endif %}>
+                    <div class="border border-gray-600 rounded-lg px-4 py-3 text-center cursor-pointer
+                                peer-checked:border-purple-500 peer-checked:bg-purple-900/30
+                                hover:border-gray-500 transition-colors">
+                        <span class="text-2xl block mb-1">
+                            {% if type.value == 'game_bug' %}🐛{% elif type.value == 'balance' %}⚖️{% else %}🎨{% endif %}
+                        </span>
+                        <span class="text-sm">{{ type.label }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Информация о тестере (опционально) -->
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-2">Ваше имя</label>
+                <input type="text" name="tester_name" placeholder="Аноним"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Email (для обратной связи)</label>
+                <input type="email" name="tester_email" placeholder="your@email.com"
+                       class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+            </div>
+        </div>
+
+        <!-- Заголовок -->
+        <div>
+            <label class="block text-sm font-medium mb-2">Краткое описание *</label>
+            <input type="text" name="title" required
+                   placeholder="Например: Игра крашится при открытии инвентаря"
+                   class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <!-- Подробное описание -->
+        <div>
+            <label class="block text-sm font-medium mb-2">Подробное описание *</label>
+            <textarea name="description" required rows="4"
+                      placeholder="Опишите проблему подробно..."
+                      class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-purple-500"></textarea>
+        </div>
+
+        <!-- Поля для багов -->
+        <div x-show="feedbackType === 'game_bug'" x-cloak class="space-y-4">
+            <div class="border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium mb-4">Информация о баге</h3>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Критичность</label>
+                    <select name="bug_severity"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="">Выберите...</option>
+                        {% for severity in severities %}
+                        <option value="{{ severity.value }}">{{ severity.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">Шаги воспроизведения</label>
+                    <textarea name="steps_to_reproduce" rows="3"
+                              placeholder="1. Открыть игру&#10;2. Нажать на кнопку X&#10;3. ..."
+                              class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Ожидаемое поведение</label>
+                        <textarea name="expected_behavior" rows="2"
+                                  placeholder="Что должно было произойти"
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Фактическое поведение</label>
+                        <textarea name="actual_behavior" rows="2"
+                                  placeholder="Что произошло на самом деле"
+                                  class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Поля для баланса -->
+        <div x-show="feedbackType === 'balance'" x-cloak class="space-y-4">
+            <div class="border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium mb-4">Проблема баланса</h3>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Область</label>
+                    <select name="balance_area"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                        <option value="">Выберите...</option>
+                        {% for area in balance_areas %}
+                        <option value="{{ area.value }}">{{ area.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Поля для AI-генерации -->
+        <div x-show="feedbackType === 'ai_generation'" x-cloak class="space-y-4">
+            <div class="border-t border-gray-700 pt-4">
+                <h3 class="text-lg font-medium mb-4">Проблема с AI-артом</h3>
+
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">ID ассета (если известен)</label>
+                    <input type="text" name="asset_id"
+                           placeholder="например: background_forest"
+                           class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-2">Проблемы (можно несколько)</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        {% for issue in ai_issues %}
+                        <label class="flex items-center space-x-2 p-2 rounded hover:bg-gray-700 cursor-pointer">
+                            <input type="checkbox" name="ai_issues" value="{{ issue.value }}"
+                                   class="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-500">
+                            <span class="text-sm">{{ issue.label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Скриншоты -->
+        <div>
+            <label class="block text-sm font-medium mb-2">Скриншоты (опционально)</label>
+            <div class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-gray-500 transition-colors">
+                <input type="file" name="screenshots" multiple accept="image/*"
+                       class="hidden" id="screenshot-input"
+                       @change="updateFileList($event)">
+                <label for="screenshot-input" class="cursor-pointer">
+                    <span class="text-4xl">📷</span>
+                    <p class="mt-2 text-gray-400">Нажмите для загрузки или перетащите файлы</p>
+                    <p class="text-xs text-gray-500 mt-1">PNG, JPG до 10MB</p>
+                </label>
+                <div x-show="files.length > 0" class="mt-4 text-left">
+                    <template x-for="file in files" :key="file.name">
+                        <div class="flex items-center space-x-2 text-sm text-gray-300">
+                            <span>📎</span>
+                            <span x-text="file.name"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Кнопка отправки -->
+        <div class="flex justify-end space-x-4">
+            <a href="/" class="px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors">
+                Отмена
+            </a>
+            <button type="submit"
+                    class="px-6 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors font-medium">
+                Отправить фидбек
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function feedbackForm() {
+    return {
+        feedbackType: 'game_bug',
+        files: [],
+        updateFileList(event) {
+            this.files = Array.from(event.target.files);
+        }
+    }
+}
+</script>
+{% endblock %}

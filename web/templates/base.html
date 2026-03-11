@@ -24,6 +24,7 @@
                     <a href="/" class="text-gray-300 hover:text-white">Dashboard</a>
                     <a href="/tasks" class="text-gray-300 hover:text-white">Tasks</a>
                     <a href="/projects" class="text-gray-300 hover:text-white">Projects</a>
+                    <a href="/tester/feedback" class="text-gray-300 hover:text-white">Feedback</a>
                 </div>
                 <div id="daemon-status" hx-get="/partials/stats" hx-trigger="every 5s" hx-swap="innerHTML">
                     {% block daemon_status %}{% endblock %}

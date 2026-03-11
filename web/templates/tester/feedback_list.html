@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Список фидбеков - Ptero Studio{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex justify-between items-center">
+        <h1 class="text-2xl font-bold">Фидбеки тестеров</h1>
+        <a href="/tester/feedback"
+           class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
+            + Новый фидбек
+        </a>
+    </div>
+
+    <!-- Статистика -->
+    <div class="grid grid-cols-5 gap-4">
+        <div class="bg-gray-800 rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold">{{ stats.total }}</div>
+            <div class="text-gray-400 text-sm">Всего</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold text-blue-400">{{ stats.new }}</div>
+            <div class="text-gray-400 text-sm">Новых</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold text-yellow-400">{{ stats.in_progress }}</div>
+            <div class="text-gray-400 text-sm">В работе</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold text-green-400">{{ stats.resolved }}</div>
+            <div class="text-gray-400 text-sm">Решено</div>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-4 text-center">
+            <div class="text-3xl font-bold text-purple-400">{{ stats.triaged }}</div>
+            <div class="text-gray-400 text-sm">Триаж</div>
+        </div>
+    </div>
+
+    <!-- Фильтры -->
+    <div class="bg-gray-800 rounded-lg p-4 flex space-x-4">
+        <select class="bg-gray-700 border border-gray-600 rounded px-3 py-1"
+                onchange="window.location.href='/tester/feedback/list?project=' + this.value">
+            <option value="">Все проекты</option>
+            {% for project in projects %}
+            <option value="{{ project.name }}" {% if project.name == selected_project %}selected{% endif %}>
+                {{ project.name }}
+            </option>
+            {% endfor %}
+        </select>
+
+        <select class="bg-gray-700 border border-gray-600 rounded px-3 py-1"
+                onchange="window.location.href='/tester/feedback/list?status=' + this.value">
+            <option value="">Все статусы</option>
+            <option value="new" {% if selected_status == 'new' %}selected{% endif %}>Новые</option>
+            <option value="triaged" {% if selected_status == 'triaged' %}selected{% endif %}>Триаж</option>
+            <option value="in_progress" {% if selected_status == 'in_progress' %}selected{% endif %}>В работе</option>
+            <option value="resolved" {% if selected_status == 'resolved' %}selected{% endif %}>Решено</option>
+        </select>
+    </div>
+
+    <!-- Список фидбеков -->
+    <div class="space-y-3">
+        {% for feedback in feedbacks %}
+        <div class="bg-gray-800 rounded-lg p-4 hover:bg-gray-750 transition-colors">
+            <div class="flex items-start justify-between">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <!-- Тип -->
+                        <span class="text-xl">
+                            {% if feedback.feedback_type.value == 'game_bug' %}🐛
+                            {% elif feedback.feedback_type.value == 'balance' %}⚖️
+                            {% else %}🎨{% endif %}
+                        </span>
+
+                        <!-- Заголовок -->
+                        <h3 class="font-medium">{{ feedback.title }}</h3>
+
+                        <!-- Статус -->
+                        <span class="px-2 py-0.5 rounded text-xs
+                            {% if feedback.status.value == 'new' %}bg-blue-900 text-blue-300
+                            {% elif feedback.status.value == 'triaged' %}bg-purple-900 text-purple-300
+                            {% elif feedback.status.value == 'in_progress' %}bg-yellow-900 text-yellow-300
+                            {% elif feedback.status.value == 'resolved' %}bg-green-900 text-green-300
+                            {% else %}bg-gray-700 text-gray-300{% endif %}">
+                            {{ feedback.status.value }}
+                        </span>
+
+                        <!-- Severity для багов -->
+                        {% if feedback.bug_severity %}
+                        <span class="px-2 py-0.5 rounded text-xs
+                            {% if feedback.bug_severity.value == 'critical' %}bg-red-900 text-red-300
+                            {% elif feedback.bug_severity.value == 'major' %}bg-orange-900 text-orange-300
+                            {% elif feedback.bug_severity.value == 'minor' %}bg-yellow-900 text-yellow-300
+                            {% else %}bg-gray-700 text-gray-300{% endif %}">
+                            {{ feedback.bug_severity.value }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <p class="text-gray-400 text-sm line-clamp-2">{{ feedback.description[:200] }}</p>
+
+                    <div class="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                        <span>{{ feedback.project }}</span>
+                        <span>{{ feedback.submitted_at[:10] }}</span>
+                        {% if feedback.tester_name %}
+                        <span>от {{ feedback.tester_name }}</span>
+                        {% endif %}
+                        {% if feedback.task_id %}
+                        <span class="text-green-400">Task: {{ feedback.task_id }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="text-gray-500 text-sm font-mono">
+                    {{ feedback.id }}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-gray-800 rounded-lg p-8 text-center text-gray-500">
+            Нет фидбеков
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

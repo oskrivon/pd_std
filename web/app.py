@@ -27,6 +27,7 @@ from fastapi.templating import Jinja2Templates
 
 from core.task_db import TaskDB, Task, TaskStatus, TaskPriority, get_task_db
 from core.project import discover_projects
+from web.tester_api import router as tester_router
 
 # Globals
 WORKSPACE = Path(os.environ.get("PTERO_WORKSPACE", "C:/Ptero Dactyl Games"))
@@ -54,6 +55,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Ptero Studio", lifespan=lifespan)
+
+# Include routers
+app.include_router(tester_router)
 
 # Static files and templates
 web_dir = Path(__file__).parent
