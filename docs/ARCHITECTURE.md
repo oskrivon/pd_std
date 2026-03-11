@@ -69,6 +69,10 @@ studio/
 │   │   └── Orchestrator   # Класс: decompose(), schedule(), dispatch()
 │   ├── task_db.py         # SQLite-based task queue (thread-safe)
 │   │   └── TaskDB         # Класс: add(), pop(), complete(), fail(), stats()
+│   ├── tester_feedback.py # Фидбек от тестеров (Enums, Storage)
+│   │   └── TesterFeedbackStorage  # JSON-based storage
+│   ├── tester_feedback_processor.py  # Фидбек → Task
+│   │   └── TesterFeedbackProcessor   # process(), severity→priority
 │   ├── project.py         # Модель проекта
 │   │   └── Project        # Класс: структура, состояние, файлы
 │   ├── daemon.py          # Continuous execution
@@ -114,6 +118,7 @@ studio/
 |-------|-----------------|
 | `Orchestrator` | Декомпозиция идей, планирование, координация воркеров |
 | `TaskDB` | SQLite task queue: atomic pop, transactions, crash recovery |
+| `TesterFeedbackProcessor` | Конвертация фидбека тестеров в Task (severity→priority) |
 | `Daemon` | Непрерывное выполнение, graceful shutdown |
 | `BudgetManager` | Трекинг токенов, выбор модели (Opus/Sonnet/Haiku) |
 | `EngineAdapter` | Unified API для движков: run, capture, inject |

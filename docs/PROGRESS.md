@@ -2,6 +2,34 @@
 
 ## Лог
 
+### 2026-03-11 — Tester Feedback Module
+
+- **Новый модуль для сбора фидбека от тестеров**:
+
+  ```
+  Тестер заполняет форму → TesterFeedback → TesterFeedbackProcessor →
+  Task в очереди демона → Автоматическое исполнение
+  ```
+
+- **Созданные компоненты**:
+  - `core/tester_feedback.py` — Enums, Dataclasses, JSON Storage
+  - `core/tester_feedback_processor.py` — конвертация фидбека в Task
+  - `web/tester_api.py` — FastAPI router с HTML и JSON endpoints
+  - `web/templates/tester/` — формы и страницы (Alpine.js)
+
+- **Типы фидбека**:
+  - Баг в игре (с severity: critical/major/minor/cosmetic)
+  - Проблема баланса (difficulty/progression/economy/combat)
+  - Проблема AI-генерации (интеграция с AssetHistoryManager)
+
+- **Endpoints**:
+  - `GET /tester/feedback` — HTML форма
+  - `POST /tester/feedback/submit` — отправка формы
+  - `GET /tester/feedback/list` — список фидбеков
+  - `POST /tester/api/feedback` — JSON API
+
+- **Workflow**: Фидбек → JSON storage → Task с приоритетом по severity → Daemon
+
 ### 2026-03-05 — Remote UI Architecture (Split Mode)
 
 - **Split architecture для удалённого доступа к Asset Review**:
