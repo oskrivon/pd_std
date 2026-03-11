@@ -2,6 +2,32 @@
 
 ## Лог
 
+### 2026-03-12 — Screenshot Upload & Remote Deploy
+
+- **Загрузка скриншотов в форме фидбека**:
+  - Форма поддерживает множественную загрузку изображений
+  - Превью с возможностью удаления (Alpine.js)
+  - Скриншоты сохраняются на VPS и передаются через WebSocket
+
+- **Полный пайплайн передачи изображений**:
+  ```
+  [Browser] → upload → [VPS: /app/data/screenshots/] → base64 →
+  → WebSocket → [Local Worker: /studio/tester_feedback/screenshots/] →
+  → Task → [Daemon: Claude видит изображения]
+  ```
+
+- **Технические исправления**:
+  - `websockets 14+` совместимость (state вместо closed)
+  - Относительные импорты в tester_feedback_processor
+  - Порядок инициализации в server.py (mkdir перед mount)
+  - Увеличен таймаут демона: 90s → 300s (для сложных задач)
+
+- **Docker деплой на VPS**:
+  - `deploy/Dockerfile` + `docker-compose.yml`
+  - Сервер: http://194.59.30.210:8081
+  - Форма фидбека: /tester/feedback
+  - Asset Review: /review
+
 ### 2026-03-11 — Tester Feedback Module
 
 - **Новый модуль для сбора фидбека от тестеров**:

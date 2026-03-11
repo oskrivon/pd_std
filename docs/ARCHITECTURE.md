@@ -913,4 +913,109 @@ class ViolationHandler:
 
         # 4. Mark task for human review
         self._flag_task_for_review(project)
+
+## Remote Deployment Architecture
+
+Система поддерживает удалённый доступ к Asset Review и Tester Feedback через split architecture.
+
+### Схема деплоя
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              INTERNET                                      │
+└──────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  VPS (194.59.30.210:8081)                                                 │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Docker Container: ptero-studio-remote                              │  │
+│  │                                                                     │  │
+│  │  FastAPI Server (server.py)                                        │  │
+│  │  ├── Static UI (HTML/JS)                                           │  │
+│  │  ├── WebSocket /ws/worker ── messages ──┐                          │  │
+│  │  ├── WebSocket /ws/ui ─────────────────┤                          │  │
+│  │  ├── /tester/feedback (форма)          │                          │  │
+│  │  ├── /review (Asset Review)            │                          │  │
+│  │  └── /screenshots/* (uploaded images)   │                          │  │
+│  └─────────────────────────────────────────┼──────────────────────────┘  │
+└────────────────────────────────────────────┼─────────────────────────────┘
+                                             │
+                                             │ WebSocket (ws://)
+                                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│  LOCAL MACHINE (с API ключами)                                            │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Local Worker (local_worker.py)                                     │  │
+│  │  ├── Подключается к VPS через WebSocket                            │  │
+│  │  ├── Получает команды (scan, generate, approve)                    │  │
+│  │  ├── Сохраняет скриншоты из фидбеков                               │  │
+│  │  ├── Создаёт Task в TaskDB                                          │  │
+│  │  └── Отправляет результаты обратно                                  │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Daemon (daemon.py)                                                 │  │
+│  │  ├── Читает Task из TaskDB                                         │  │
+│  │  ├── Запускает Claude Code                                          │  │
+│  │  └── Claude видит скриншоты как локальные файлы                    │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Структура deploy/
+
+```
+studio/deploy/
+├── Dockerfile              # Python 3.12 + FastAPI + uvicorn
+├── docker-compose.yml      # Порт 8081, volumes для data
+├── requirements.txt        # fastapi, uvicorn, websockets, jinja2
+└── app/
+    ├── server.py           # FastAPI app с WebSocket proxy
+    └── templates/
+        ├── index.html
+        ├── review.html
+        └── tester/
+            ├── feedback_form.html
+            ├── feedback_success.html
+            └── feedback_list.html
+```
+
+### Команды деплоя
+
+```bash
+# На VPS
+cd /root/ptero-studio
+docker-compose up -d
+
+# Локально
+cd studio
+python -m core.local_worker --workspace "C:\Ptero Dactyl Games" \
+    --url "ws://194.59.30.210:8081/ws/worker"
+```
+
+### Поток данных: Tester Feedback со скриншотами
+
+```
+1. [Browser] POST /tester/feedback/submit (multipart/form-data)
+       │
+       ▼
+2. [VPS Server] Сохраняет в /app/data/screenshots/{id}/
+       │         Кодирует в base64
+       │
+       ▼
+3. [WebSocket] CMD_SUBMIT_TESTER_FEEDBACK + base64 images
+       │
+       ▼
+4. [Local Worker] Декодирует base64
+       │           Сохраняет в studio/tester_feedback/screenshots/{id}/
+       │
+       ▼
+5. [TesterFeedbackProcessor] Создаёт Task с путями к скриншотам
+       │
+       ▼
+6. [Daemon] Запускает Claude Code
+       │
+       ▼
+7. [Claude] Читает скриншоты как локальные файлы
 ```
