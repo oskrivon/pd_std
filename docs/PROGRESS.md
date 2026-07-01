@@ -24,7 +24,7 @@
 
 - **Docker деплой на VPS**:
   - `deploy/Dockerfile` + `docker-compose.yml`
-  - Сервер: http://194.59.30.210:8081
+  - Сервер: http://<VPS_HOST>:8081
   - Форма фидбека: /tester/feedback
   - Asset Review: /review
 

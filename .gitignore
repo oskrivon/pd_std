@@ -41,6 +41,8 @@ Thumbs.db
 # Secrets (never commit)
 .env
 .env.*
+!.env.example
+!config/.env.example
 secrets/
 credentials.*
 *.pem

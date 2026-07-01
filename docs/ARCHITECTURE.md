@@ -927,7 +927,7 @@ class ViolationHandler:
                                     │
                                     ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  VPS (194.59.30.210:8081)                                                 │
+│  VPS (<VPS_HOST>:8081)                                                 │
 │  ┌────────────────────────────────────────────────────────────────────┐  │
 │  │  Docker Container: ptero-studio-remote                              │  │
 │  │                                                                     │  │
@@ -991,7 +991,7 @@ docker-compose up -d
 # Локально
 cd studio
 python -m core.local_worker --workspace "C:\Ptero Dactyl Games" \
-    --url "ws://194.59.30.210:8081/ws/worker"
+    --url "ws://<VPS_HOST>:8081/ws/worker"
 ```
 
 ### Поток данных: Tester Feedback со скриншотами
