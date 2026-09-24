@@ -9,7 +9,7 @@ Usage:
     tasks = decompose_idea(
         project="hamster",
         idea="Add a pause menu",
-        project_path="C:/Ptero Dactyl Games/hamster"
+        project_path="./workspace/hamster"
     )
     # Returns list of task descriptions
 """
@@ -148,7 +148,7 @@ if __name__ == "__main__":
     tasks = decompose_idea(
         project="hamster",
         idea="Add sound effects when clicking objects",
-        project_path="C:/Ptero Dactyl Games/hamster"
+        project_path="./workspace/hamster"
     )
 
     print("Decomposed tasks:")

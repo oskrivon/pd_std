@@ -365,7 +365,7 @@ async def run_continuous(self):
 Каждый проект — отдельный репозиторий. Это обеспечивает изоляцию и независимость.
 
 ```
-C:/Ptero Dactyl Games/           ← НЕ git (workspace)
+./workspace/           ← НЕ git (workspace)
 ├── .gitignore                   ← Игнорирует всё (safety net)
 │
 ├── studio/                      ← git repo (инфраструктура)
@@ -833,7 +833,7 @@ Each project contains a marker file for explicit boundaries:
 # babylon/.isolation
 
 project_id: babylon
-boundary: C:/Ptero Dactyl Games/babylon
+boundary: ./workspace/babylon
 
 allowed_external_reads:
   - studio/tools/**
@@ -990,7 +990,7 @@ docker-compose up -d
 
 # Локально
 cd studio
-python -m core.local_worker --workspace "C:\Ptero Dactyl Games" \
+python -m core.local_worker --workspace "./workspace" \
     --url "ws://<VPS_HOST>:8081/ws/worker"
 ```
 

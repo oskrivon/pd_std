@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Setup path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-os.environ["PTERO_WORKSPACE"] = "C:/Ptero Dactyl Games"
+os.environ["PTERO_WORKSPACE"] = "./workspace"
 
 from fastapi.testclient import TestClient
 from web.app import app

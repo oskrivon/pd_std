@@ -3,7 +3,7 @@
 ## Окружение
 
 - **OS**: Windows 10/11
-- **Путь**: `C:\Ptero Dactyl Games\studio`
+- **Путь**: `./workspace\studio`
 - **Python**: 3.11+
 - **LÖVE**: `C:\Program Files\LOVE\love.exe`
 - **Unreal**: 5.7 (для babylon проекта)
@@ -58,7 +58,7 @@ UNREAL_MCP_PORT = 9877
 ### Быстрый старт (одна задача)
 
 ```bash
-cd "C:\Ptero Dactyl Games"
+cd "./workspace"
 python -m studio.cli run backpack_hero
 ```
 
@@ -189,7 +189,7 @@ python -m studio.cli queue clear
 ### Запуск MCP сервера
 ```bash
 # В Unreal Editor Output Log:
-py "C:/Ptero Dactyl Games/babylon/Scripts/UnrealPython/startup.py"
+py "./workspace/babylon/Scripts/UnrealPython/startup.py"
 ```
 
 ### Проверка подключения

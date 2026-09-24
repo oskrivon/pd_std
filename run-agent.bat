@@ -2,7 +2,7 @@
 REM Ptero Dactyl Games: Agent Runner
 REM Запускает Claude Code для выполнения задачи из случайного проекта
 
-cd /d "C:\Ptero Dactyl Games"
+cd /d "./workspace"
 
 REM Логирование
 set LOGFILE=studio\logs\%date:~-4,4%-%date:~-7,2%-%date:~-10,2%.log

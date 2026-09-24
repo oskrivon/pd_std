@@ -7,7 +7,7 @@ Manages projects, task queue, and dispatches work to workers.
 Usage:
     from core.orchestrator import Orchestrator
 
-    orch = Orchestrator("C:/Ptero Dactyl Games")
+    orch = Orchestrator("./workspace")
     orch.add_task("backpack_hero", "Add pause menu")
     orch.run_once()  # Execute one task
 """
@@ -50,7 +50,7 @@ class Orchestrator:
 
     def __init__(
         self,
-        workspace: str | Path = "C:/Ptero Dactyl Games",
+        workspace: str | Path = "./workspace",
         tasks_file: str = "tasks.json",
         budget_file: str = "budget.json"
     ):

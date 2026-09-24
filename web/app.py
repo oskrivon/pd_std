@@ -30,7 +30,7 @@ from core.project import discover_projects
 from web.tester_api import router as tester_router
 
 # Globals
-WORKSPACE = Path(os.environ.get("PTERO_WORKSPACE", "C:/Ptero Dactyl Games"))
+WORKSPACE = Path(os.environ.get("PTERO_WORKSPACE", "./workspace"))
 db: Optional[TaskDB] = None
 projects: dict = {}
 daemon_process = None

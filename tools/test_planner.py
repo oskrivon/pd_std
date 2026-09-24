@@ -19,7 +19,7 @@ import logging
 
 logger = logging.getLogger("studio.test_planner")
 
-WORKSPACE = Path("C:/Ptero Dactyl Games")
+WORKSPACE = Path("./workspace")
 
 
 def get_git_diff(project_path: Path, commits: int = 5) -> str:
@@ -93,7 +93,7 @@ def generate_test_plan(
     Args:
         project: Project name
         commits: Number of commits to analyze
-        workspace: Workspace path (default: C:/Ptero Dactyl Games)
+        workspace: Workspace path (default: ./workspace)
 
     Returns:
         Markdown test plan

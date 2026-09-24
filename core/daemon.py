@@ -7,7 +7,7 @@ Runs until no tasks left or interrupted.
 Usage:
     from core.daemon import Daemon
 
-    daemon = Daemon(workspace="C:/Ptero Dactyl Games")
+    daemon = Daemon(workspace="./workspace")
     daemon.run()  # Runs until empty or Ctrl+C
 
 Logs are written to:
@@ -42,7 +42,7 @@ class Daemon:
 
     def __init__(
         self,
-        workspace: str | Path = "C:/Ptero Dactyl Games",
+        workspace: str | Path = "./workspace",
         poll_interval: int = 10,
         validate: bool = True,
         analyze: bool = True,

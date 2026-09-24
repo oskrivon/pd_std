@@ -116,7 +116,7 @@ def run_game(
     if not project_path.is_absolute():
         # Искать в известных местах
         search_paths = [
-            Path("C:/Ptero Dactyl Games") / project,
+            Path("./workspace") / project,
             Path.cwd() / project,
             Path.cwd().parent / project
         ]

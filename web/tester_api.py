@@ -34,7 +34,7 @@ from core.tester_feedback_processor import TesterFeedbackProcessor
 from core.project import discover_projects
 
 # Globals
-WORKSPACE = Path(os.environ.get("PTERO_WORKSPACE", "C:/Ptero Dactyl Games"))
+WORKSPACE = Path(os.environ.get("PTERO_WORKSPACE", "./workspace"))
 STORAGE_PATH = WORKSPACE / "studio" / "tester_feedback"
 
 router = APIRouter(prefix="/tester", tags=["tester"])

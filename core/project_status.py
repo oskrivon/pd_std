@@ -7,12 +7,12 @@ Each project maintains its own status file that other projects can read.
 Usage:
     from core.project_status import ProjectStatus
 
-    status = ProjectStatus.load("C:/Ptero Dactyl Games/hamster")
+    status = ProjectStatus.load("./workspace/hamster")
     status.set_working("Adding new feature")
     status.save()
 
     # Other project can read:
-    other = ProjectStatus.load("C:/Ptero Dactyl Games/backpack_hero")
+    other = ProjectStatus.load("./workspace/backpack_hero")
     if other.state == "blocked":
         print(f"Blocked by: {other.blocked_by}")
 """

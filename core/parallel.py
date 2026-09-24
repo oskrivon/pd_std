@@ -7,7 +7,7 @@ Each worker handles tasks from different projects to avoid conflicts.
 Usage:
     from core.parallel import ParallelExecutor
 
-    executor = ParallelExecutor(workspace="C:/Ptero Dactyl Games", workers=3)
+    executor = ParallelExecutor(workspace="./workspace", workers=3)
     results = executor.run(max_tasks=10)
 """
 
@@ -45,7 +45,7 @@ class ParallelExecutor:
 
     def __init__(
         self,
-        workspace: str | Path = "C:/Ptero Dactyl Games",
+        workspace: str | Path = "./workspace",
         workers: int = 2,
         analyze: bool = True,
         validate: bool = False

@@ -567,7 +567,7 @@ Examples:
 
     parser.add_argument(
         "--workspace", "-w",
-        default="C:/Ptero Dactyl Games",
+        default="./workspace",
         help="Workspace path"
     )
 

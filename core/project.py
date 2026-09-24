@@ -8,10 +8,10 @@ Usage:
     from core.project import Project, discover_projects
 
     # Load existing project
-    project = Project.load("C:/Ptero Dactyl Games/backpack_hero")
+    project = Project.load("./workspace/backpack_hero")
 
     # Discover all projects in workspace
-    projects = discover_projects("C:/Ptero Dactyl Games")
+    projects = discover_projects("./workspace")
 
     # Create new project
     project = Project.scaffold("my_game", engine="love")
@@ -105,7 +105,7 @@ class Project:
         cls,
         name: str,
         engine: Engine | str = Engine.LOVE,
-        workspace: str | Path = "C:/Ptero Dactyl Games"
+        workspace: str | Path = "./workspace"
     ) -> "Project":
         """
         Create new project with standard structure.
@@ -369,7 +369,7 @@ Saved/
 if __name__ == "__main__":
     import sys
 
-    workspace = Path("C:/Ptero Dactyl Games")
+    workspace = Path("./workspace")
     print(f"Discovering projects in {workspace}...")
 
     projects = discover_projects(workspace)

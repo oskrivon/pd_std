@@ -7,7 +7,7 @@
 project_id: PROJECT_NAME
 
 # Absolute path boundary (auto-filled by orchestrator)
-boundary: C:/Ptero Dactyl Games/PROJECT_NAME
+boundary: ./workspace/PROJECT_NAME
 
 # External paths worker CAN READ (glob patterns)
 allowed_external_reads:

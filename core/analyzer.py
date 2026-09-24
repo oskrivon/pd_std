@@ -10,7 +10,7 @@ Usage:
     result = analyze_task(
         project="hamster",
         description="добавить парк с деревьями",
-        project_path="C:/Ptero Dactyl Games/hamster"
+        project_path="./workspace/hamster"
     )
 
     if result.task_type == TaskType.UNCLEAR:
@@ -225,7 +225,7 @@ if __name__ == "__main__":
         result = analyze_task(
             project="hamster",
             description=task,
-            project_path="C:/Ptero Dactyl Games/hamster"
+            project_path="./workspace/hamster"
         )
         print(f"  Type: {result.task_type.value}")
         print(f"  Confidence: {result.confidence}")
